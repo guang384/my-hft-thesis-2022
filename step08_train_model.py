@@ -1,4 +1,8 @@
-# 尝试训练
+"""
+
+进行训练
+
+"""
 import sys
 
 from elegantrl.agent import AgentDQN, AgentDoubleDQN, AgentD3QN, AgentDiscretePPO

@@ -3,9 +3,8 @@
 回测训练结果
 给定训练好的模型和时间周期，按天为单位打印收益曲线
 
-python step9_backtesting.py data/actor_01568563_00003.500.pth   20220101    20220110
-                             |<--   path to model file    -->|  |<-start->|  |<-end->|
-
+python step9_backtesting.py data/actor_01568563_00003.500.pth    20220101    20220110
+ |<--   run command    -->|   |<--   path to model file    -->|  |<-start->|  |<-end->|
 
 """
 import sys
