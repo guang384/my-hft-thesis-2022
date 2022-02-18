@@ -7,6 +7,7 @@ from elegantrl.run import train_and_evaluate, train_and_evaluate_mp
 
 import gym
 from gym import register
+from gym.vector.utils import CloudpickleWrapper
 
 from tiny_market import profits_or_loss_reward, linear_fine
 
@@ -21,7 +22,7 @@ gym.logger.set_level(40)  # Block warning
 
 
 def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
-              cwd_suffix=''):
+              cwd_suffix=None):
     env_args = get_gym_env_args(gym.make("TinyMarketGymEnvRandom-v0"), if_print=False)
 
     def make_env_func(**kwargs):
@@ -34,7 +35,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
                  )
         return env
 
-    args = Arguments(AgentDQN, env_func=make_env_func, env_args=env_args)
+    args = Arguments(AgentDQN, env_func=CloudpickleWrapper(make_env_func), env_args=env_args)
 
     # DQN, DoubleDQN, D3QN, PPO-Discrete for discrete actions
     # AgentDQN
@@ -46,18 +47,19 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     args.gamma = 0.99
     args.eval_times = 10
     args.if_remove = False
-    args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
+    if cwd_suffix is not None:
+        args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
 
-    train_and_evaluate(args)
+    train_and_evaluate_mp(args)
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         argv_file_path = sys.argv[1]
         try_train(argv_file_path)
-    if len(sys.argv) == 3:
+    elif len(sys.argv) == 3:
         argv_file_path = sys.argv[1]
-        cwd_suffix = sys.argv[2]
-        try_train(argv_file_path, cwd_suffix)
+        argv_cwd_suffix = sys.argv[2]
+        try_train(argv_file_path, argv_cwd_suffix)
     else:
         try_train()
