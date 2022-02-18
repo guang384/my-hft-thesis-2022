@@ -48,6 +48,16 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     # AgentDiscretePPO
 
     args.target_step = args.max_step
+
+    # 经过测试：
+    # 每个worker 大概消耗 2200M的显存（估计是当显存的模型放到GPU上时？）
+    # 当worker_num=1 时 显存消耗约为 6900M显存
+    # 当为多线程情况时 会有三类进程：
+    #   一个进程用来Learn
+    #   一个进程用来Evaluation
+    #   N个Worker进程用来和环境交互获得trajectory
+    args.worker_num = 2  # rollout workers number pre GPU (adjust it to get high GPU usage)
+
     args.gamma = 0.99
     args.eval_times = 2**5
     args.if_remove = False
