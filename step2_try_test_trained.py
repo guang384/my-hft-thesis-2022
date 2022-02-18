@@ -13,7 +13,7 @@ import gym
 gym.logger.set_level(40)  # Block warning
 
 
-def test_model(actor_path="LunarLanderContinuous-v2_ModSAC_0/actor_00198252_00219.352.pth"):
+def test_model(actor_path="data_sample/actor_00198252_00219.352.pth"):
     get_gym_env_args(gym.make("LunarLanderContinuous-v2"), if_print=True)
 
     env_func = gym.make
@@ -28,17 +28,16 @@ def test_model(actor_path="LunarLanderContinuous-v2_ModSAC_0/actor_00198252_0021
         "id": "LunarLanderContinuous-v2",
     }
 
-    # 初始化
     agent = AgentModSAC
+
     args = Arguments(agent, env_func=env_func, env_args=env_args)
     gpu_id = args.learner_gpus
+
     env = config.build_env(env_func=env_func, env_args=env_args)
-    # 加载训练好的模型
+
     act = agent(args.net_dim, env.state_dim, env.action_dim, gpu_id=gpu_id, args=args).act
     act.load_state_dict(torch.load(actor_path, map_location=lambda storage, loc: storage))
-    torch.set_grad_enabled(False)
-
-    # 测试
+    torch.no_grad()
     r_s_ary = [evaluator.get_episode_return_and_step(env, act) for _ in range(args.eval_times)]
     r_s_ary = np.array(r_s_ary, dtype=np.float32)
     r_avg, s_avg = r_s_ary.mean(axis=0)  # average of episode return and episode step
