@@ -11,7 +11,7 @@ import random
 import gym
 from gym import register
 
-from tiny_market import profits_or_loss_with_fine_reward
+from tiny_market import linear_fine
 
 register(
     id='TinyMarketGymEnvDaily-v0',
@@ -26,7 +26,7 @@ def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     env.init(capital=20000,
              file_path=file_path,
              date_start="20211001", date_end="20211231",
-             reward_func=profits_or_loss_with_fine_reward)
+             fine_func=linear_fine(1))
 
     env.reset()
     print("Day : ", env.current_day())
