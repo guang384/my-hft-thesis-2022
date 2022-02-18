@@ -49,7 +49,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
 
     args.target_step = args.max_step
     args.gamma = 0.99
-    args.eval_times = 10
+    args.eval_times = 2**5
     args.if_remove = False
     if cwd_suffix is not None:
         args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
