@@ -11,7 +11,7 @@ from gym import spaces
 
 import matplotlib.pyplot as plt
 import os
-from tiny_market.reward_calculation import profits_or_loss_reward
+from .reward_calculation import profits_or_loss_reward
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 

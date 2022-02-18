@@ -1,6 +1,11 @@
-# 模拟市场环境测试
-# 场景1：日常环境 给定范围内的第一个交易日 随机动作输出图
+"""
 
+TinyMarket 基本功能验证
+场景1：日常环境 给定范围内的第一个交易日 随机动作输出图
+
+"""
+
+import sys
 import random
 
 import gym
@@ -16,10 +21,10 @@ register(
 )
 
 
-def train():
+def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     env = gym.make('TinyMarketGymEnvDaily-v0')
     env.init(capital=20000,
-             file_path="dominant_processed_data_20170101_20220214.h5",
+             file_path=file_path,
              date_start="20211001", date_end="20211231",
              reward_func=profits_or_loss_with_fine_reward)
 
@@ -40,5 +45,9 @@ def train():
 
 if __name__ == '__main__':
     gym.logger.setLevel(gym.logger.WARN)
-    train()
+    if len(sys.argv) == 2:
+        argv_file_path = sys.argv[1]
+        run_test(argv_file_path)
+    else:
+        run_test()
     print("Done.")

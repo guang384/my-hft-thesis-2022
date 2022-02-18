@@ -1,3 +1,8 @@
+# my-hft-thesis-2022 custom
+data/
+LunarLanderContinuous-v2_ModSAC_0/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

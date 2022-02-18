@@ -1,6 +1,10 @@
-# 模拟市场环境测试
-# 场景2：随机环境 无限次执行 观察内存占用和执行时间
+"""
 
+TinyMarket 稳定性测试
+场景2：随机环境 无限次执行 观察内存占用和执行时间
+
+"""
+import sys
 import random
 
 import gym
@@ -16,10 +20,10 @@ register(
 )
 
 
-def train():
+def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     env = gym.make('TinyMarketGymEnvRandom-v0')
     env.init(capital=20000,
-             file_path="dominant_processed_data_20170103_20220215.h5",
+             file_path=file_path,
              date_start="20211001", date_end="20211231")
 
     env.reset()
@@ -54,5 +58,9 @@ def train():
 
 if __name__ == '__main__':
     gym.logger.setLevel(gym.logger.WARN)
-    train()
+    if len(sys.argv) == 2:
+        argv_file_path = sys.argv[1]
+        run_test(argv_file_path)
+    else:
+        run_test()
     print("Done.")

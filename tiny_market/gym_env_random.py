@@ -4,7 +4,7 @@ import random
 import numpy as np
 import pandas as pd
 
-from tiny_market.gym_env_base import GymEnvBase
+from .gym_env_base import GymEnvBase
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 

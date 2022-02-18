@@ -35,9 +35,9 @@ rqsdk update-data -c 1 --tick M
 
 
 def export_tick_data_from_rqdata_dir(
-        dominant_csv='dominant_contract.csv',  # 主力合约信息CSV文件
-        to_file_name_prefix='dominant_tick_data',  # 输出文件名前缀
-        start_date='2017-01-01',  # 导出数据开始的日期
+        start_date,  # 导出数据开始的日期 exp:'2010-01-01'
+        dominant_csv='data_sample/dominant_contract.csv',  # 主力合约信息CSV文件
+        to_file_name_prefix='data/dominant_tick_data',  # 输出文件名前缀
         data_dir_path=None,  # 默认为 rqdata 目录下读取数据
 ):
     dominants = pd.read_csv(dominant_csv)
@@ -50,20 +50,28 @@ def export_tick_data_from_rqdata_dir(
         data_dir_path = os.path.expanduser('~/.rqalpha-plus/bundle/ticks')
 
     # 获取开始日期和结束日期（指定日期开始的第一个合约的第一天和拥有数据的最后一个合约的最后一天
-    first_contract_file_path = os.path.join(data_dir_path, "%s.h5" % contracts[0])
+    for contract in contracts:
+        first_contract_file_path = os.path.join(data_dir_path, "%s.h5" % contract)
+        if os.path.isfile(first_contract_file_path):
+            break
+
     with h5py.File(first_contract_file_path, 'r') as file:
         days = pd.to_datetime(list(file.keys()))
         first_date = days[days >= start_date][0].strftime('%Y%m%d')
-    last_contract_file_path = os.path.join(data_dir_path, "%s.h5" % contracts[-1])
-    with h5py.File(last_contract_file_path, 'r') as file:
-        days = pd.to_datetime(list(file.keys()))
-        last_date = days[days <= dominant_last_date][-1].strftime('%Y%m%d')
+
+    for contract in contracts[::-1]:  # 倒叙
+        last_contract_file_path = os.path.join(data_dir_path, "%s.h5" % contract)
+        if os.path.isfile(last_contract_file_path):
+            last_date = dominants[dominants['dominant'] == 'M1009'].iloc[-1]['date'].replace('-', '')
+            break
 
     # 数据存储为H5
     save = h5py.File('%s_%s_%s.h5' % (to_file_name_prefix, first_date, last_date), 'w')  # 写入文件
 
     for symbol in contracts:
         file_path = os.path.join(data_dir_path, "%s.h5" % symbol)
+        if not os.path.isfile(file_path):
+            break
         h5 = h5py.File(file_path, 'r')  # 只读打开
         keys = h5.keys()
         # 当前合约作为主力合约的日期
@@ -78,8 +86,8 @@ def export_tick_data_from_rqdata_dir(
                     day_data.drop(
                         columns=['a2', 'b2', 'a3', 'b3', 'a4', 'b4', 'a5', 'b5',
                                  'a2_v', 'b2_v', 'a3_v', 'b3_v', 'a4_v', 'b4_v', 'a5_v', 'b5_v'], inplace=True)
-                    # 保存数据
-                    save[day] = day_data.to_records(index=False)  # 用to_records转的可以带列名 直接to_numpy 不带列名
+                    # 保存数据 ( 用to_records转的可以带列名 直接to_numpy 不带列名 )
+                    save.create_dataset(day, data=day_data.to_records(index=False), **hdf5plugin.Blosc())
                     print('| < --  Exported dataframe [sharp = %s] !' % str(day_data.shape))
                     del day_data
                 else:
@@ -94,8 +102,8 @@ def export_tick_data_from_rqdata_dir(
 
 
 def preprocessing_tick_data(
-        tick_data_file_path='dominant_tick_data_20170101_20220214.h5',
-        to_file_path='dominant_processed_data_20170101_20220214.h5'
+        tick_data_file_path,  # 输入的tick文件 exp 'dominant_tick_data_20100104_20100504.h5'
+        to_file_path,  # 输出处理结果文件 exp 'dominant_processed_data_20100104_20100504.h5'
 ):
     # 读取数据
     file = h5py.File(tick_data_file_path, 'r')  # 只读打开
@@ -193,7 +201,8 @@ def preprocessing_tick_data(
         processed_data['turnover_mean_5m'] = turnover.rolling(window=600).mean().round(4)
         processed_data['turnover_std_5m'] = turnover.rolling(window=600).std().round(4)
 
-        save[day] = processed_data.to_records(index=False)
+        # 保存数据 ( 用to_records转的可以带列名 直接to_numpy 不带列名 )
+        save.create_dataset(day, data=processed_data.to_records(index=False), **hdf5plugin.Blosc())
 
         # print(processed_data)
         print('| < --  Processed data [sharp = %s] !' % str(processed_data.shape))
