@@ -20,7 +20,8 @@ register(
 gym.logger.set_level(40)  # Block warning
 
 
-def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5"):
+def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
+              cwd_suffix=''):
     env_args = get_gym_env_args(gym.make("TinyMarketGymEnvRandom-v0"), if_print=False)
 
     def make_env_func(**kwargs):
@@ -45,7 +46,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     args.gamma = 0.99
     args.eval_times = 10
     args.if_remove = False
-    args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}' + '_LinearFine_0_1'
+    args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
 
     train_and_evaluate(args)
 
@@ -54,5 +55,9 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         argv_file_path = sys.argv[1]
         try_train(argv_file_path)
+    if len(sys.argv) == 3:
+        argv_file_path = sys.argv[1]
+        cwd_suffix = sys.argv[2]
+        try_train(argv_file_path, cwd_suffix)
     else:
         try_train()
