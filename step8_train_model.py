@@ -45,6 +45,8 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     args.gamma = 0.99
     args.eval_times = 10
     args.if_remove = False
+    args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}' + '_LinearFine_0_1'
+
     train_and_evaluate(args)
 
 
