@@ -8,6 +8,8 @@ from elegantrl.run import train_and_evaluate, train_and_evaluate_mp
 import gym
 from gym import register
 
+from tiny_market import profits_or_loss_reward, linear_fine
+
 register(
     id='TinyMarketGymEnvRandom-v0',
     entry_point='tiny_market:GymEnvRandom',
@@ -25,7 +27,10 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5"):
         env = gym.make(env_args['env_name'])
         env.init(capital=20000,
                  file_path=file_path,
-                 date_start="20211201", date_end="20211231")
+                 date_start="20211201", date_end="20211231",
+                 reward_func=profits_or_loss_reward,
+                 fine_func=linear_fine(0.1)
+                 )
         return env
 
     args = Arguments(AgentDQN, env_func=make_env_func, env_args=env_args)

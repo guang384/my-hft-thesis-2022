@@ -11,7 +11,7 @@ from gym import spaces
 
 import matplotlib.pyplot as plt
 import os
-from .reward_calculation import profits_or_loss_reward
+from .reward_and_fine_calculation import profits_or_loss_reward, none_fine
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -30,6 +30,7 @@ class GymEnvBase(gym.Env):
         raise NotImplementedError
 
     def __init__(self):
+        self.fine_func = None
         self.last_reward = None
         self.file = None
         self.file_path = None  # 文件所在位置
@@ -78,8 +79,10 @@ class GymEnvBase(gym.Env):
              date_start,  # 日期范围 exp:"20220105"
              date_end,  # 日期范围 exp:"20220106"
              reward_func=profits_or_loss_reward,  # 回报计算函数
+             fine_func=none_fine,  # 罚金计算函数 （空仓不动可能会有惩罚
              ):
         self.capital = capital
+        self.fine_func = fine_func
 
         self.reward_func = reward_func
         self.last_reward = 0
@@ -180,9 +183,6 @@ class GymEnvBase(gym.Env):
 
         self.time = pd.to_datetime(str(int(current_transaction_data['time'])), format='%H%M%S%f')
 
-        if len(self.position) == 0:
-            self.fine = np.timedelta64(self.time - self.start_time, 's').astype('int') * 0.01  # 空仓一秒钟一分钱
-
         # 根据动作调仓
         if self.time > self.TIME_CLOSE_ALL \
                 or self.max_observation_index - self.current_observation_index < 100:  # 距离收盘一分钟 平所有
@@ -231,12 +231,14 @@ class GymEnvBase(gym.Env):
         self.records['position'].append(position_info['position'])
         self.records['risk'].append(position_info['risk'])
         self.records['action'].append(action)
-        self.records['fine'].append(self.fine)
 
         # 准备返回 观测状态，奖励，是否完成，和其他信息（持仓情况）
         observation = self._observation()
         # 奖励
-        current_reward = self.reward_func(self.records)
+        if len(self.position) == 0:
+            seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
+            self.fine = self.fine_func(seconds_of_watching)
+        current_reward = self.reward_func(self.records) - self.fine  # 积累奖励等于奖金减去罚款
         reward = current_reward - self.last_reward  # 单步的激励是两次激励的变化量（delta_reward）
         self.last_reward = current_reward
         # 如果完成了就一直时完成状态

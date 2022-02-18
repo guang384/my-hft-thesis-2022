@@ -13,7 +13,7 @@ from gym import register
 import timeit
 import psutil
 
-from tiny_market import profits_or_loss_with_fine_reward
+from tiny_market import linear_fine
 
 register(
     id='TinyMarketGymEnvDaily-v0',
@@ -28,7 +28,7 @@ def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
     env.init(capital=20000,
              file_path=file_path,
              date_start="20211201", date_end="20211231",
-             reward_func=profits_or_loss_with_fine_reward)
+             fine_func=linear_fine(1))
 
     env.reset()
     print("Day start : ", env.current_day())
