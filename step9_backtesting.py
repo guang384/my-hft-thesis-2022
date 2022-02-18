@@ -1,4 +1,13 @@
-# 尝试训练
+"""
+
+回测训练结果
+给定训练好的模型和时间周期，按天为单位打印收益曲线
+
+python step9_backtesting.py data/actor_01568563_00003.500.pth   20220101    20220110
+                             |<--   path to model file    -->|  |<-start->|  |<-end->|
+
+
+"""
 import sys
 import random
 
@@ -23,6 +32,8 @@ gym.logger.set_level(40)  # Block warning
 
 def test_model(
         actor_path,
+        start_date="20220101",
+        end_date="20220110",
         file_path="data/dominant_processed_data_20170103_20220215.h5"):
     env_args = get_gym_env_args(gym.make("TinyMarketGymEnvDaily-v0"), if_print=False)
 
@@ -30,7 +41,7 @@ def test_model(
         env_inner = gym.make(env_args['env_name'])
         env_inner.init(capital=20000,
                        file_path=file_path,
-                       date_start="20220101", date_end="20220110", )
+                       date_start=start_date, date_end=end_date, )
         return env_inner
 
     # 初始化
@@ -74,5 +85,13 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         argv_actor_path = sys.argv[1]
         test_model(argv_actor_path)
+    elif len(sys.argv) == 4:
+        argv_actor_path = sys.argv[1]
+        argv_test_start_date = sys.argv[2]
+        argv_test_end_date = sys.argv[3]
+        test_model(actor_path=argv_actor_path,
+                   start_date=argv_test_start_date,
+                   end_date=argv_test_end_date)
+
     else:
         test_model("data_sample/tiny_market_actor_avgR_4.00.pth")
