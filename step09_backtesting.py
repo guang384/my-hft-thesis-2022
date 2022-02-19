@@ -18,6 +18,7 @@ from gym import register
 
 from elegantrl import config
 from tiny_market import linear_fine
+import numpy as np
 
 register(
     id='TinyMarketGymEnvDaily-v0',
@@ -67,10 +68,11 @@ def test_model(
     # 加载模型
     act = agent(args.net_dim, env.state_dim, env.action_dim, gpu_id=args.learner_gpus, args=args).act
     act.load_state_dict(torch.load(actor_path, map_location=lambda storage, loc: storage))
-    torch.no_grad()
+
     print('Model loaded -> ', actor_path)
 
     # 测试开始
+
     device = next(act.parameters()).device  # net.parameters() is a Python generator.
     max_step = 50000
 
@@ -81,9 +83,10 @@ def test_model(
         episode_return = 0.0  # sum of rewards in an episode
         for episode_step in range(max_step):
             s_tensor = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-            a_tensor = act(s_tensor)
-            a_tensor = a_tensor.argmax(dim=1)  # discrete
-            action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
+            with torch.no_grad():
+                a_tensor = act(s_tensor)
+                a_tensor = a_tensor.argmax(dim=1)  # discrete
+                action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
             state, reward, done, info = env.step(action)
             episode_return += reward
             if done:
@@ -93,6 +96,21 @@ def test_model(
         # 展示结果
         print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s "
               % (episode_return, info['amount'], env.current_day()))
+
+        # 交易记录分析
+        orders = env.get_order_history()
+        total_hold_seconds = 0  # 分析订单持有总时间
+        profits_or_loss = []  # 分析订单盈亏
+        for order in orders:
+            open_time, open_index, direction, open_price, close_price, close_time = order
+            total_hold_seconds += (close_time - open_time).total_seconds()
+            profits_or_loss.append(direction * (close_price - open_price) * 10)
+
+        print("Transaction frequency : %d/day | Holding time of single order : %.2fs | "
+              "Average profit and loss of orders : %.2f | Standard deviation : %.2f"
+              % (len(orders) * 2, total_hold_seconds / len(orders),
+                 np.array(profits_or_loss).mean(), np.array(profits_or_loss).std()))
+
         # 下一天
         env.reset()
 
