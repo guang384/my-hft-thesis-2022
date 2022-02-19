@@ -35,7 +35,10 @@ def test_model(
         agent_name='DQN',
         start_date="20220101",
         end_date="20220110",
-        file_path="data/dominant_processed_data_20170103_20220215.h5"):
+        file_path="data/dominant_processed_data_20170103_20220215.h5",
+        if_continue=True):
+    if not if_continue:
+        print('The capital will be reset at the beginning of each day')
     agent_name = agent_name.lower()
     if agent_name == 'dqn':
         agent = AgentDQN
@@ -106,11 +109,16 @@ def test_model(
             total_hold_seconds += (close_time - open_time).total_seconds()
             profits_or_loss.append(direction * (close_price - open_price) * 10)
 
-        print("Transaction frequency : %d/day | Holding time of single order : %.2fs | "
-              "Average profit and loss of orders : %.2f | Standard deviation : %.2f"
-              % (len(orders) * 2, total_hold_seconds / len(orders),
-                 np.array(profits_or_loss).mean(), np.array(profits_or_loss).std()))
-
+        if len(orders) == 0:
+            print('No Transaction.')
+        else:
+            print("Transaction frequency : %d/day | Holding time of single order : %.2fs | "
+                  "Average profit and loss of orders : %.2f | Standard deviation : %.2f"
+                  % (len(orders) * 2, total_hold_seconds / len(orders),
+                     np.array(profits_or_loss).mean(), np.array(profits_or_loss).std()))
+        env.render()
+        if if_continue:  # 更新额度
+            env.set_capital(info['amount'])
         # 下一天
         env.reset()
 
@@ -140,6 +148,16 @@ if __name__ == '__main__':
                    agent_name=argv_agent_name,
                    start_date=argv_test_start_date,
                    end_date=argv_test_end_date)
-
+    elif len(sys.argv) == 6:
+        argv_actor_path = sys.argv[1]
+        argv_agent_name = sys.argv[2]
+        argv_test_start_date = sys.argv[3]
+        argv_test_end_date = sys.argv[4]
+        argv_if_continue = sys.argv[5]
+        test_model(actor_path=argv_actor_path,
+                   agent_name=argv_agent_name,
+                   start_date=argv_test_start_date,
+                   end_date=argv_test_end_date,
+                   if_continue=argv_if_continue.lower() == 'true')
     else:
         test_model("data_sample/tiny_market_actor_avgR_4.00.pth")
