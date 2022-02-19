@@ -75,14 +75,15 @@ class TimeitPipeLearner:
                 sample_rounds = int(1 + buffer.now_len * args.repeat_times / args.batch_size)
                 print("Train loop %d, New steps %d (%.2f%%), "
                       "Buffed %d (%.2f%%), Update net sample rounds %d, "
-                      "avg -> Exp %.4f | UpdBuf %.4f | UpdNet %.4f (%.6f/r) | Eva %.4f"
+                      "avg %.4f -> Exp %.4f | UpdBuf %.4f | UpdNet %.4f (%.6f/r) | Eva %.4f"
                       % (loop_counter,
                          steps,
                          (steps/buffer.now_len)*100,
                          buffer.now_len,
                          (buffer.now_len/args.max_memo)*100,
                          sample_rounds,
-                         total_evaluate / loop_counter,
+                         evaluated-start,
+                         total_explore / loop_counter,
                          total_update_buffer / loop_counter,
                          total_update_net / loop_counter,
                          total_update_net / loop_counter/sample_rounds,
