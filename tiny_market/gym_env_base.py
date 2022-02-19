@@ -30,6 +30,7 @@ class GymEnvBase(gym.Env):
         raise NotImplementedError
 
     def __init__(self):
+
         self.fine_func = None
         self.last_reward = None
         self.file = None
@@ -48,7 +49,8 @@ class GymEnvBase(gym.Env):
         self.unclosed_order_index = 0
 
         self.current_position = None  # 当前头寸 多头>0 空头<0 空仓=0
-
+        self.margin_pre_lot = None  # 当前每手保证金
+        self.last_price = None  # 当前最新价
         self.transaction_data = None  # 交易数据
         self.time = None  # 当前时间
         self.start_time = None  # 开始时间
@@ -143,12 +145,17 @@ class GymEnvBase(gym.Env):
         start_index = self.pick_start_index_and_time_when_reset()
 
         self.current_observation_index = start_index
+        self.last_price = self.transaction_data.iloc[self.current_observation_index]['last_price']
+        self.margin_pre_lot = self.last_price * self.MARGIN_RATE * self.CONTRACT_SIZE
         self.start_time = pd.to_datetime(str(int(self.transaction_data.iloc[start_index]['time'])), format='%H%M%S%f')
         logger.info("| --> Market start at : %s" % self.start_time.strftime('%X'))
 
         observation = self._observation()
 
         return observation
+
+    def set_capital(self, capital):
+        self.capital = capital
 
     '''
     Actions:
@@ -172,6 +179,13 @@ class GymEnvBase(gym.Env):
         self.current_observation_index += 1  # 推动时间前进
         current_transaction_data = self.transaction_data.iloc[self.current_observation_index]
 
+        # 最新价
+        self.last_price = current_transaction_data['last_price']
+        # 最新每手保证金
+        self.margin_pre_lot = self.last_price * self.MARGIN_RATE * self.CONTRACT_SIZE
+        # 当前时刻
+        self.time = pd.to_datetime(str(int(current_transaction_data['time'])), format='%H%M%S%f')
+
         # 挂单量
         ask_volume = current_transaction_data['ask_volume']
         bid_volume = current_transaction_data['bid_volume']
@@ -180,11 +194,6 @@ class GymEnvBase(gym.Env):
         market_ask_price = max(last_transaction_data['ask'], current_transaction_data['ask'])
         # 市价单 可成交买价 （当前tick 和下一tick 低价）
         market_bid_price = min(last_transaction_data['bid'], current_transaction_data['bid'])
-
-        # 最新价
-        last_price = current_transaction_data['last_price']
-
-        self.time = pd.to_datetime(str(int(current_transaction_data['time'])), format='%H%M%S%f')
 
         # 根据动作调仓
         if self.time > self.TIME_CLOSE_ALL \
@@ -208,23 +217,23 @@ class GymEnvBase(gym.Env):
                         if direction < 0:  # 持仓为空头
                             self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
                         else:
-                            self._open_long(market_ask_price, ask_volume, last_price)  # 加多
+                            self._open_long(market_ask_price, ask_volume)  # 加多
                     elif action == 2:  # 看空
                         if direction > 0:  # 持仓为多头
                             self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
                         else:
-                            self._open_short(market_bid_price, bid_volume, last_price)  # 加空
+                            self._open_short(market_bid_price, bid_volume)  # 加空
                 else:  # 无持仓
                     if action == 1:  # 看多
-                        self._open_long(market_ask_price, ask_volume, last_price)  # 加多
+                        self._open_long(market_ask_price, ask_volume)  # 加多
                     elif action == 2:  # 看空
-                        self._open_short(market_bid_price, bid_volume, last_price)  # 加空
+                        self._open_short(market_bid_price, bid_volume)  # 加空
 
         # 仓位调整完成，检查持仓情况
-        position_info = self._position_info(last_price)
+        position_info = self._position_info()
         while position_info['risk'] > 0.95:  # 爆仓了 强平到不爆
             self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
-            position_info = self._position_info(last_price)
+            position_info = self._position_info()
 
         # 更新当前头寸
         self.current_position = position_info['position']
@@ -271,7 +280,7 @@ class GymEnvBase(gym.Env):
         ax4.plot(self.records['position'])
         plt.show()
 
-    def _open_long(self, ask_price, ask_volume, last_price):
+    def _open_long(self, ask_price, ask_volume):
         if ask_volume < self.MIN_ORDER_VOLUME:  # 订单量不足
             logger.info('Insufficient order quantity.')
 
@@ -280,7 +289,7 @@ class GymEnvBase(gym.Env):
             logger.info('The position will not be opened '
                         'when it is less than six minutes from the end of the trading time.')
             return
-        if not self._can_open_new_position(last_price):  # 检查可用资金是否允许开仓
+        if not self._can_open_new_position():  # 检查可用资金是否允许开仓
             logger.info("Undermargined ...")
             return
 
@@ -295,7 +304,7 @@ class GymEnvBase(gym.Env):
         self.commission += self.COMMISSION_PRE_LOT  # 手续费
         logger.info("[%s] Open long on %d" % (self.time.strftime('%X'), ask_price))
 
-    def _open_short(self, bid_price, bid_volume, last_price):
+    def _open_short(self, bid_price, bid_volume):
         if bid_volume < self.MIN_ORDER_VOLUME:  # 订单量不足
             logger.info('Insufficient order quantity.')
         if self.time > self.TIME_ONLY_CLOSE \
@@ -303,7 +312,7 @@ class GymEnvBase(gym.Env):
             logger.info('The position will not be opened '
                         'when it is less than six minutes from the end of the trading time.')
             return
-        if not self._can_open_new_position(last_price):  # 检查可用资金是否允许开仓
+        if not self._can_open_new_position():  # 检查可用资金是否允许开仓
             logger.info("Undermargined ...")
             return
 
@@ -348,13 +357,13 @@ class GymEnvBase(gym.Env):
         # 获取交易数据
         transaction_state = self.transaction_data.iloc[self.current_observation_index]  # 前两位是日期数据不要
         # 获取仓位数据
-        position_state = pd.Series(self._position_info(transaction_state['last_price']))
+        position_state = pd.Series(self._position_info())
         # 拼接数据并返回结果
-        return np.array(tuple(transaction_state)[2:] + tuple(position_state))
+        return np.array(tuple(transaction_state)[2:] + tuple(position_state))  # 前两位是日期数据不要
 
-    def _position_info(self, price):
+    def _position_info(self):
         # 持仓保证金
-        margin = price * self.MARGIN_RATE * self.CONTRACT_SIZE * (len(self.order_list) - self.unclosed_order_index)
+        margin = self.margin_pre_lot * (len(self.order_list) - self.unclosed_order_index)
         # 仓位
         position = 0
         # 持仓盈亏 Floating P/L
@@ -362,7 +371,7 @@ class GymEnvBase(gym.Env):
         for i in range(self.unclosed_order_index, len(self.order_list)):
             # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
             _, _, direction, open_price, _, _ = self.order_list[i]
-            delta = price - open_price
+            delta = self.last_price - open_price
             floating_pl += direction * delta  # 只计算盈利点数
             position += direction
         floating_pl *= self.CONTRACT_SIZE  # 盈利点数乘以合约规模就是利润
@@ -384,8 +393,7 @@ class GymEnvBase(gym.Env):
             'margin': margin
         }
 
-    def _can_open_new_position(self, last_price):
+    def _can_open_new_position(self):
         # 更新持仓情况
-        position_info = self._position_info(last_price)
-        margin_pre_lot = last_price * self.MARGIN_RATE * self.CONTRACT_SIZE  # 开仓需要的保证金(每手保证金)
-        return position_info['free_margin'] * 0.8 > margin_pre_lot
+        position_info = self._position_info()
+        return position_info['free_margin'] * 0.8 > self.margin_pre_lot
