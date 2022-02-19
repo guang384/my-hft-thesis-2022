@@ -81,6 +81,10 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     #   N个Worker进程用来和环境交互获得trajectory
     args.worker_num = 2  # rollout workers number pre GPU (adjust it to get high GPU usage)
 
+    # 这个参数是在训练过程中 update_net阶段每批次处理数据量
+    # 默认是  self.net_dim * 2  但是好像用不满GPU 可以放大提高资源利用率
+    args.batch_size = 2 ** 10
+
     args.gamma = 0.99
     args.eval_times = 2 ** 5
     args.if_remove = False

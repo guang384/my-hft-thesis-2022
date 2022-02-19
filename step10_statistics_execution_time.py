@@ -72,16 +72,20 @@ class TimeitPipeLearner:
             total_evaluate += evaluated - net_updated
             loop_counter += 1
             if loop_counter % 1 == 0:
-                print("Train loop %d, Increased steps %d, "
-                      "Buffer size %d, Update net sample rounds %d, "
-                      "avgExp %.4f, avgUpdBuf %.4f, avgUpdNet %.4f, avgEva %.4f ."
+                sample_rounds = int(1 + buffer.now_len * args.repeat_times / args.batch_size)
+                print("Train loop %d, New steps %d (%.2f%%), "
+                      "Buffed %d (%.2f%%), Update net sample rounds %d, "
+                      "avg -> Exp %.4f | UpdBuf %.4f | UpdNet %.4f (%.6f/r) | Eva %.4f"
                       % (loop_counter,
                          steps,
+                         (steps/buffer.now_len)*100,
                          buffer.now_len,
-                         int(1 + buffer.now_len * args.repeat_times / args.batch_size),
+                         (buffer.now_len/args.max_memo)*100,
+                         sample_rounds,
                          total_evaluate / loop_counter,
                          total_update_buffer / loop_counter,
                          total_update_net / loop_counter,
+                         total_update_net / loop_counter/sample_rounds,
                          total_evaluate / loop_counter))
         agent.save_or_load_agent(args.cwd, if_save=True)
         print(f'| Learner: Save in {args.cwd}')
