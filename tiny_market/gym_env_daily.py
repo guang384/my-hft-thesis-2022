@@ -21,7 +21,7 @@ class GymEnvDaily(GymEnvBase):
         return self.possible_days[self.current_day_index]
 
     def if_all_days_done(self):
-        return self.current_day_index >= len(self.possible_days) - 1
+        return self.current_day_index >= len(self.possible_days) - 1 and self.done
 
     def set_capital(self, capital):
         self.capital = capital
@@ -45,5 +45,7 @@ class GymEnvDaily(GymEnvBase):
 
     # 直到收盘才结束 (不能开仓了且已经清仓
     def if_done_when_step(self):
-        if_end = self.time > self.TIME_ONLY_CLOSE and self.current_position == 0
-        return if_end or self.current_observation_index >= self.max_observation_index
+        if_no_money = self.current_position == 0 and not self._can_open_new_position()
+        if_no_time = self.current_position == 0 and self.time > self.TIME_ONLY_CLOSE
+        if_current_day_end = self.current_observation_index >= self.max_observation_index
+        return if_no_money or if_no_time or if_current_day_end
