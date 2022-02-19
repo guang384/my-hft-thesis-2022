@@ -26,7 +26,29 @@ gym.logger.set_level(40)  # Block warning
 
 
 def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
+              agent_name='dqn',
               cwd_suffix=None):
+    agent_name = agent_name.lower()
+    if agent_name == 'dqn':
+        agent = AgentDQN
+        print('use agent AgentDQN')
+    elif agent_name == 'discreteppo' or agent_name == 'ppo':
+        agent = AgentDiscretePPO
+        print('use agent AgentDiscretePPO')
+    elif agent_name == 'doubledqn' or agent_name == 'ddqn':
+        agent = AgentDoubleDQN
+        print('use agent AgentDoubleDQN')
+    elif agent_name == 'd3qn':
+        agent = AgentD3QN
+        print('use agent AgentD3QN')
+    else:
+        raise RuntimeError('unknown agent : ', agent_name)
+
+    # AgentDQN
+    # AgentDoubleDQN
+    # AgentD3QN
+    # AgentDiscretePPO
+
     env_args = get_gym_env_args(gym.make("TinyMarketGymEnvRandom-v0"), if_print=False)
 
     def make_env_func(**kwargs):
@@ -39,7 +61,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
                  )
         return env
 
-    args = Arguments(AgentDQN, env_func=CloudpickleWrapper(make_env_func), env_args=env_args)
+    args = Arguments(agent, env_func=CloudpickleWrapper(make_env_func), env_args=env_args)
 
     # DQN, DoubleDQN, D3QN, PPO-Discrete for discrete actions
     # AgentDQN
@@ -59,7 +81,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     args.worker_num = 2  # rollout workers number pre GPU (adjust it to get high GPU usage)
 
     args.gamma = 0.99
-    args.eval_times = 2**5
+    args.eval_times = 2 ** 5
     args.if_remove = False
     if cwd_suffix is not None:
         args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
@@ -70,10 +92,16 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         argv_file_path = sys.argv[1]
-        try_train(argv_file_path)
+        try_train(file_path=argv_file_path)
     elif len(sys.argv) == 3:
         argv_file_path = sys.argv[1]
         argv_cwd_suffix = sys.argv[2]
-        try_train(argv_file_path, argv_cwd_suffix)
+        try_train(file_path=argv_file_path, cwd_suffix=argv_cwd_suffix)
+    elif len(sys.argv) == 4:
+        argv_agent_name = sys.argv[1]
+        argv_file_path = sys.argv[2]
+        argv_cwd_suffix = sys.argv[3]
+
+        try_train(agent_name=argv_agent_name, file_path=argv_file_path, cwd_suffix=argv_cwd_suffix)
     else:
         try_train()
