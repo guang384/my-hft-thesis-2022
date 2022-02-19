@@ -27,7 +27,8 @@ gym.logger.set_level(40)  # Block warning
 
 def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
               agent_name='dqn',
-              cwd_suffix=None):
+              cwd_suffix=None,
+              train_and_evaluate_func=train_and_evaluate_mp):
     agent_name = agent_name.lower()
     if agent_name == 'dqn':
         agent = AgentDQN
@@ -86,7 +87,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     if cwd_suffix is not None:
         args.cwd = f'./{args.env_name}_{args.agent.__name__[5:]}_{args.learner_gpus}_{cwd_suffix}'
 
-    train_and_evaluate_mp(args)
+    train_and_evaluate_func(args)
 
 
 if __name__ == '__main__':
