@@ -70,8 +70,6 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     # AgentD3QN
     # AgentDiscretePPO
 
-    args.target_step = args.max_step
-
     # 经过测试：
     # 每个worker 大概消耗 2200M的显存（估计是当显存的模型放到GPU上时？）
     # 当worker_num=1 时 显存消耗约为 6900M显存
@@ -79,11 +77,29 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     #   一个进程用来Learn
     #   一个进程用来Evaluation
     #   N个Worker进程用来和环境交互获得trajectory
-    args.worker_num = 2  # rollout workers number pre GPU (adjust it to get high GPU usage)
+    # 文档注释：  rollout workers number pre GPU (adjust it to get high GPU usage)
+    args.worker_num = 2  # for PC
+    # args.worker_num = 8  # for Nvidia 3090 24G
 
-    # 这个参数是在训练过程中 update_net阶段每批次处理数据量
-    # 默认是  self.net_dim * 2  但是好像用不满GPU 可以放大提高资源利用率
-    args.batch_size = 2 ** 10
+    '''
+     优化目标让训练用时和探索用时接近 这样在异步探索情况下CPU和GPU利用率最高
+     (异步情况下，探索占很少时间（不占时间可能因为训练耗时太多了，或者也可用同步训练模式下调参确认训练和探索两个阶段用时接近后 再改成异步的)）
+    '''
+
+    # 这个参数是在训练过程中 update_net阶段每批次处理数据量（影响训练用时）
+    # 默认是  self.net_dim * 2  用不满GPU 可以适当放大提高资源利用率
+    args.batch_size = 2 ** 8  # for PC
+    # args.batch_size = 2 ** 12  # for Nvidia 3090 24G
+
+    # 单轮探索的最低步数（影响探索用时）
+    # 当一个episode走完了会reset了继续走直到到达target_step，到达target_step会继续走完没走完的episode
+    # 根据情况设置:让探索和训练次数达到平衡
+    args.target_step = 300  # for PC
+    # args.target_step = 500  # for Nvidia 3090 24G
+
+    # 控制reply buffer 总容量
+    # 每次探索得到数量不多时，总容量太大容易导致达到容量上限后新探索的结果reply buffer不能及时得到反应
+    args.max_memo = 2 ** 20  # capacity of replay buffer
 
     args.gamma = 0.99
     args.eval_times = 2 ** 5
