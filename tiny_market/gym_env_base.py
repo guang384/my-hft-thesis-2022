@@ -42,9 +42,12 @@ class GymEnvBase(gym.Env):
         self.done = False
         self.closed_pl = 0  # 平仓盈亏 Closed Trade P/L
         self.commission = 0  # 已花费手续费
-        self.position = None  # 持仓信息  list Tuple(open_time, open_index, direction, open_price, close_price, close_time)
+
+        # 持仓信息  list Tuple(open_time, open_index, direction, open_price, close_price, close_time)
+        self.order_list = None
+        self.unclosed_order_index = 0
+
         self.current_position = None  # 当前头寸 多头>0 空头<0 空仓=0
-        self.position_unclosed_index = 0
 
         self.transaction_data = None  # 交易数据
         self.time = None  # 当前时间
@@ -110,11 +113,11 @@ class GymEnvBase(gym.Env):
         self.closed_pl = 0
         self.commission = 0
 
-        del self.position
-        self.position = []
+        del self.order_list
+        self.order_list = []
 
         self.current_position = 0
-        self.position_unclosed_index = 0
+        self.unclosed_order_index = 0
 
         del self.records
         self.records = {
@@ -186,21 +189,21 @@ class GymEnvBase(gym.Env):
         # 根据动作调仓
         if self.time > self.TIME_CLOSE_ALL \
                 or self.max_observation_index - self.current_observation_index < 100:  # 距离收盘一分钟 平所有
-            for i in range(self.position_unclosed_index, len(self.position)):
+            for i in range(self.unclosed_order_index, len(self.order_list)):
                 self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
             self.done = True  # 收盘了
         else:
             if action == 0:  # 观望 检查是否有超时需要平仓的
-                for i in range(self.position_unclosed_index, len(self.position)):
-                    open_time, open_index, direction, open_price, close_price, close_time = self.position[i]
+                for i in range(self.unclosed_order_index, len(self.order_list)):
+                    open_time, open_index, direction, open_price, close_price, close_time = self.order_list[i]
                     if (self.time - open_time).total_seconds() > self.MAX_HOLD_SECONDS:  # 持仓超过最大持仓时间
                         self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
                     else:
                         break
             else:
-                if self.position_unclosed_index < len(self.position):  # 有持仓
+                if self.unclosed_order_index < len(self.order_list):  # 有持仓
                     # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-                    _, _, direction, _, _, _ = self.position[self.position_unclosed_index]  # 持仓方向
+                    _, _, direction, _, _, _ = self.order_list[self.unclosed_order_index]  # 持仓方向
                     if action == 1:  # 看多
                         if direction < 0:  # 持仓为空头
                             self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
@@ -235,7 +238,7 @@ class GymEnvBase(gym.Env):
         # 准备返回 观测状态，奖励，是否完成，和其他信息（持仓情况）
         observation = self._observation()
         # 奖励
-        if len(self.position) == 0:
+        if len(self.order_list) == 0:
             seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
             self.fine = self.fine_func(seconds_of_watching)
         current_reward = self.reward_func(self.records) - self.fine  # 积累奖励等于奖金减去罚款
@@ -247,11 +250,14 @@ class GymEnvBase(gym.Env):
         # 附加信息
         info = position_info.copy()
         info['commission'] = self.commission
-        info['trans_count'] = len(self.position)
-        info['unclosed_index'] = self.position_unclosed_index
+        info['trans_count'] = len(self.order_list)
+        info['unclosed_index'] = self.unclosed_order_index
         info['fine'] = self.fine
 
         return observation, reward, done, info
+
+    def get_order_history(self):
+        return self.order_list.copy()
 
     def render(self, mode="human"):
         logger.info("You render the env")
@@ -280,12 +286,12 @@ class GymEnvBase(gym.Env):
 
         direction = 1
         # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-        self.position.append((self.time,
-                              self.current_observation_index,
-                              direction,
-                              ask_price,
-                              None,
-                              None))  # 开多
+        self.order_list.append((self.time,
+                                self.current_observation_index,
+                                direction,
+                                ask_price,
+                                None,
+                                None))  # 开多
         self.commission += self.COMMISSION_PRE_LOT  # 手续费
         logger.info("[%s] Open long on %d" % (self.time.strftime('%X'), ask_price))
 
@@ -303,39 +309,39 @@ class GymEnvBase(gym.Env):
 
         direction = -1
         # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-        self.position.append((self.time,
-                              self.current_observation_index,
-                              direction,
-                              bid_price,
-                              None,
-                              None))  # 开空
+        self.order_list.append((self.time,
+                                self.current_observation_index,
+                                direction,
+                                bid_price,
+                                None,
+                                None))  # 开空
         self.commission += self.COMMISSION_PRE_LOT  # 手续费
         logger.info("[%s] Open short on %d" % (self.time.strftime('%X'), bid_price))
 
     # 平最早的一单
     def _close_earliest(self, market_ask_price, market_bid_price, ask_volume, bid_volume):
-        if self.position_unclosed_index >= len(self.position):  # 没有未平仓,则直接返回
+        if self.unclosed_order_index >= len(self.order_list):  # 没有未平仓,则直接返回
             return
         # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-        open_time, index, direction, open_price, _, _ = self.position[self.position_unclosed_index]  # 第一个未平仓合约
+        open_time, index, direction, open_price, _, _ = self.order_list[self.unclosed_order_index]  # 第一个未平仓合约
         if direction > 0:
             close_price = market_bid_price
             if bid_volume < self.MIN_ORDER_VOLUME:  # 如果订单数不足惩罚5个点
                 close_price = market_bid_price - 5
             self.closed_pl += (close_price - open_price) * self.CONTRACT_SIZE  # 更新平仓盈亏
             logger.info("[%s] Close long on %d" % (self.time.strftime('%X'), market_bid_price))
-            self.position[self.position_unclosed_index] = (open_time, index, direction, open_price,
-                                                           close_price, self.time)
+            self.order_list[self.unclosed_order_index] = (open_time, index, direction, open_price,
+                                                          close_price, self.time)
         elif direction < 0:
             close_price = market_ask_price
             if ask_volume < self.MIN_ORDER_VOLUME:  # 如果订单数不足惩罚5个点
                 close_price = market_ask_price + 5
             self.closed_pl += (open_price - market_ask_price) * self.CONTRACT_SIZE  # 更新平仓盈亏
             logger.info("[%s] Close short on %d" % (self.time.strftime('%X'), market_ask_price))
-            self.position[self.position_unclosed_index] = (open_time, index, direction, open_price,
-                                                           close_price, self.time)
+            self.order_list[self.unclosed_order_index] = (open_time, index, direction, open_price,
+                                                          close_price, self.time)
         # 指针后移，表示当前指针所指的头寸平仓
-        self.position_unclosed_index += 1
+        self.unclosed_order_index += 1
 
     # 观测状态 = 交易状态 + 持仓状态
     def _observation(self):
@@ -348,14 +354,14 @@ class GymEnvBase(gym.Env):
 
     def _position_info(self, price):
         # 持仓保证金
-        margin = price * self.MARGIN_RATE * self.CONTRACT_SIZE * (len(self.position) - self.position_unclosed_index)
+        margin = price * self.MARGIN_RATE * self.CONTRACT_SIZE * (len(self.order_list) - self.unclosed_order_index)
         # 仓位
         position = 0
         # 持仓盈亏 Floating P/L
         floating_pl = 0  # 利润
-        for i in range(self.position_unclosed_index, len(self.position)):
+        for i in range(self.unclosed_order_index, len(self.order_list)):
             # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-            _, _, direction, open_price, _, _ = self.position[i]
+            _, _, direction, open_price, _, _ = self.order_list[i]
             delta = price - open_price
             floating_pl += direction * delta  # 只计算盈利点数
             position += direction
