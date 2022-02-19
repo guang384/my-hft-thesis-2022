@@ -72,10 +72,13 @@ class TimeitPipeLearner:
             total_evaluate += evaluated - net_updated
             loop_counter += 1
             if loop_counter % 1 == 0:
-                print("Train roll  %d , current steps: %d"
-                      "avgExplore %.4f avgUpdateBuffer %.4f avgUpdateNet %.4f avgEvaluate %.4f"
+                print("Train loop %d, Increased steps %d, "
+                      "Buffer size %d, Update net sample rounds %d, "
+                      "avgExp %.4f, avgUpdBuf %.4f, avgUpdNet %.4f, avgEva %.4f ."
                       % (loop_counter,
                          steps,
+                         buffer.now_len,
+                         int(1 + buffer.now_len * args.repeat_times / args.batch_size),
                          total_evaluate / loop_counter,
                          total_update_buffer / loop_counter,
                          total_update_net / loop_counter,
