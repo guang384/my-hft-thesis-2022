@@ -69,25 +69,36 @@ class TimeitPipeLearner(PipeLearner):
             update_buffer_time = buffer_updated - explored
             update_net_time = net_updated - buffer_updated
             evaluate_time = evaluated - net_updated
-            total_time = evaluated-start
+            total_time = evaluated - start
             loop_counter += 1
             if loop_counter % 10 == 0:
-                sample_rounds = int(1 + buffer.now_len * args.repeat_times / args.batch_size)
-                print("Train loop %d, New steps %d (%.2f%%), "
-                      "Buffed %d (%.2f%%), UpdNet sampled %d rounds. "
-                      "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs (%.6fs/r), Eva %.4fs )"
-                      % (loop_counter,
-                         steps,
-                         (steps/buffer.now_len)*100,
-                         buffer.now_len,
-                         (buffer.now_len/args.max_memo)*100,
-                         sample_rounds,
-                         total_time,
-                         explore_time,
-                         update_buffer_time,
-                         update_net_time,
-                         update_net_time/sample_rounds,
-                         evaluate_time))
+                try:
+                    sample_rounds = int(1 + buffer.now_len * args.repeat_times / args.batch_size)
+                    print("Train loop %d, New steps %d (%.2f%%), "
+                          "Buffed %d (%.2f%%), UpdNet sampled %d rounds. "
+                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs (%.6fs/r), Eva %.4fs )"
+                          % (loop_counter,
+                             steps,
+                             (steps / buffer.now_len) * 100,
+                             buffer.now_len,
+                             (buffer.now_len / args.max_memo) * 100,
+                             sample_rounds,
+                             total_time,
+                             explore_time,
+                             update_buffer_time,
+                             update_net_time,
+                             update_net_time / sample_rounds,
+                             evaluate_time))
+                except AttributeError:
+                    print("Train loop %d, New steps %d , "
+                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs, Eva %.4fs )"
+                          % (loop_counter,
+                             steps,
+                             total_time,
+                             explore_time,
+                             update_buffer_time,
+                             update_net_time,
+                             evaluate_time))
         agent.save_or_load_agent(args.cwd, if_save=True)
         print(f'| Learner: Save in {args.cwd}')
 
