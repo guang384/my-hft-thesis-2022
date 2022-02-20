@@ -1,8 +1,7 @@
 # my-hft-thesis-2022 custom
 data/
 LunarLanderContinuous-v2_*/
-TinyMarketGymEnvRandom-v0_*/
-
+TinyMarketGymEnv*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -133,3 +132,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
