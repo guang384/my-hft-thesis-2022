@@ -21,7 +21,10 @@ class GymEnvDaily(GymEnvBase):
         return self.possible_days[self.current_day_index]
 
     def if_all_days_done(self):
-        return self.current_day_index >= len(self.possible_days) - 1 and self.done
+        if self.current_day_index is None:
+            return False
+        else:
+            return self.current_day_index >= len(self.possible_days) - 1 and self.done
 
     def set_capital(self, capital):
         self.capital = capital
