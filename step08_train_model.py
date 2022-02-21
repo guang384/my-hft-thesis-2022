@@ -15,8 +15,10 @@ from gym.vector.utils import CloudpickleWrapper
 
 from tiny_market import profits_or_loss_reward, linear_fine
 
+ENV_NAME = 'TinyMarketGymEnvRandom-v0'
+
 register(
-    id='TinyMarketGymEnvRandom-v0',
+    id=ENV_NAME,
     entry_point='tiny_market:GymEnvRandom',
     max_episode_steps=3600,  # 一个episode最大步数
     reward_threshold=1000000.0,
@@ -28,7 +30,8 @@ gym.logger.set_level(40)  # Block warning
 def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
               agent_name='dqn',
               cwd_suffix=None,
-              train_and_evaluate_func=train_and_evaluate_mp):
+              train_and_evaluate_func=train_and_evaluate_mp,
+              env_name=ENV_NAME):
     agent_name = agent_name.lower()
     if agent_name == 'dqn':
         agent = AgentDQN
@@ -50,17 +53,31 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     # AgentD3QN
     # AgentDiscretePPO
 
-    env_args = get_gym_env_args(gym.make("TinyMarketGymEnvRandom-v0"), if_print=False)
-
     def make_env_func(**kwargs):
-        env = gym.make(env_args['env_name'])
-        env.init(capital=20000,
-                 file_path=file_path,
-                 date_start="20211201", date_end="20211231",
-                 reward_func=profits_or_loss_reward,
-                 fine_func=linear_fine(0.1)
-                 )
+        env = gym.make(env_name,
+                       capital=20000,
+                       file_path=file_path,
+                       date_start="20211201", date_end="20211231",
+                       reward_func=profits_or_loss_reward,
+                       fine_func=linear_fine(0.1)
+                       )
         return env
+
+    tmp_env = make_env_func()
+    env_args = get_gym_env_args(tmp_env, if_print=False)
+    del tmp_env
+
+    '''
+    env_args = {
+        'env_num': 1,
+        'env_name': 'TinyMarketGymEnvRandom-v0',
+        'max_step': 3600,
+        'state_dim': 32,
+        'action_dim': 3,
+        'if_discrete': True,
+        'target_return': 1000000.0,
+    }
+    '''
 
     args = Arguments(agent, env_func=CloudpickleWrapper(make_env_func), env_args=env_args)
 

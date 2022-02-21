@@ -24,11 +24,11 @@ register(
 
 
 def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
-    env = gym.make('TinyMarketGymEnvDaily-v0')
-    env.init(capital=20000,
-             file_path=file_path,
-             date_start="20211201", date_end="20211231",
-             fine_func=linear_fine(1))
+    env = gym.make('TinyMarketGymEnvDaily-v0',
+                   capital=20000,
+                   file_path=file_path,
+                   date_start="20211201", date_end="20211231",
+                   fine_func=linear_fine(1))
 
     env.reset()
     print("Day start : ", env.current_day())

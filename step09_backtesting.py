@@ -55,14 +55,18 @@ def test_model(
     else:
         raise RuntimeError('unknown agent : ', agent_name)
 
-    env_args = get_gym_env_args(gym.make("TinyMarketGymEnvDaily-v0"), if_print=False)
+    env_name = "TinyMarketGymEnvDaily-v0"
 
     def make_env_func(**kwargs):
-        env_inner = gym.make(env_args['env_name'])
-        env_inner.init(capital=20000,
-                       file_path=file_path,
-                       date_start=start_date, date_end=end_date, )
+        env_inner = gym.make(env_name,
+                             capital=20000,
+                             file_path=file_path,
+                             date_start="20211201", date_end="20211231", )
         return env_inner
+
+    tmp_env = make_env_func()
+    env_args = get_gym_env_args(tmp_env, if_print=False)
+    del tmp_env
 
     # 初始化
     args = Arguments(agent, env_func=make_env_func, env_args=env_args)
@@ -116,7 +120,7 @@ def test_model(
                   "Average profit and loss of orders : %.2f | Standard deviation : %.2f"
                   % (len(orders) * 2, total_hold_seconds / len(orders),
                      np.array(profits_or_loss).mean(), np.array(profits_or_loss).std()))
-        env.render()
+        # env.render()
         if if_continue:  # 更新额度
             env.set_capital(info['amount'])
         # 下一天

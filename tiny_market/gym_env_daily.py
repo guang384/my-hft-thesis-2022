@@ -10,11 +10,11 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 pd.set_option('display.float_format', lambda x: '%.10f' % x)  # 为了直观的显示数字，不采用科学计数法
 
 
+# 按照顺序 执行全天的交易
 class GymEnvDaily(GymEnvBase):
 
-    # 按照顺序
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.current_day_index = None
 
     def current_day(self):

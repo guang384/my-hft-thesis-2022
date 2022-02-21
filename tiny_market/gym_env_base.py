@@ -29,26 +29,65 @@ class GymEnvBase(gym.Env):
     def if_done_when_step(self):
         raise NotImplementedError
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        """ 一些常量 """
+        self.MAX_HOLD_SECONDS = 300  # 单个合约最长持仓时间（秒数） 5分钟
+        self.MIN_ORDER_VOLUME = 1  # 想要开仓成功订单量的最小阈值
 
-        self.fine_func = None
-        self.last_reward = None
-        self.file = None
-        self.file_path = None  # 文件所在位置
-        self.possible_days = None  # 可选的交易日
+        self.MARGIN_RATE = 0.15  # 保证金率
+        self.COMMISSION_PRE_LOT = 5  # 佣金
+        self.CONTRACT_SIZE = 10  # 合约规模
 
-        self.reward_func = None  # 奖励计算函数
-        self.capital = 0  # 本金
-        self.fine = 0  # 罚金 （空仓观望会有罚金
+        self.TIME_ONLY_CLOSE = pd.to_datetime('225500000', format='%H%M%S%f')  # 最后6分钟只平仓不开仓
+        self.TIME_CLOSE_ALL = pd.to_datetime('225900000', format='%H%M%S%f')  # 最后1分钟强平所有然后结束
+
+        """ 必填参数 """
+        # 数据文件位置
+        assert 'file_path' in kwargs.keys(), 'Parameter [file_path] must be specified.'
+        # 本金
+        assert 'capital' in kwargs.keys(), 'Parameter [capital] must be specified.'
+        # 日期范围 开始结束日期如果是交易日则都包括 exp:"20220105"
+        assert 'date_start' in kwargs.keys(), 'Parameter [date_start] must be specified.'
+        assert 'date_end' in kwargs.keys(), 'Parameter [date_end] must be specified.'
+        date_start = kwargs['date_start']
+        date_end = kwargs['date_end']
+
+        file_path = kwargs['file_path']
+        capital = kwargs['capital']
+
+        """ 选填参数 """
+        # 回报计算函数
+        if 'reward_func' in kwargs.keys() and callable(kwargs['reward_func']):
+            reward_func = kwargs['reward_func']
+        else:
+            reward_func = profits_or_loss_reward
+        # 罚金计算函数 （空仓不动可能会有惩罚
+        if 'fine_func' in kwargs.keys() and callable(kwargs['fine_func']):
+            fine_func = kwargs['fine_func']
+        else:
+            fine_func = none_fine
+
+        """ 初始化参数 """
+        self.file = h5py.File(file_path, 'r')  # 只读打开数据
+        days = pd.to_datetime(list(self.file.keys()))
+        days = days[days.isin(pd.date_range(date_start, date_end))].strftime('%Y%m%d')
+        self.possible_days = days  # 可选的交易日
+
+        self.fine_func = fine_func
+        self.reward_func = reward_func
+
         self.done = False
+        self.capital = capital  # 本金
+        self.last_reward = 0  # 前一步的奖励
+        self.fine = 0  # 罚金 （空仓观望会有罚金
         self.closed_pl = 0  # 平仓盈亏 Closed Trade P/L
         self.commission = 0  # 已花费手续费
 
         # 持仓信息  list Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-        self.order_list = None
+        self.order_list = []
         self.unclosed_order_index = 0
 
-        self.current_position = None  # 当前头寸 多头>0 空头<0 空仓=0
+        self.current_position = 0  # 当前头寸 多头>0 空头<0 空仓=0
         self.margin_pre_lot = None  # 当前每手保证金
         self.last_price = None  # 当前最新价
         self.transaction_data = None  # 交易数据
@@ -65,47 +104,26 @@ class GymEnvBase(gym.Env):
             'action': []
         }
 
+        """ 状态空间和动作空间 """
+        first_day = self.possible_days[0]  # 随便取一天
+        # 获取一个状态数据以便设置状态空间
+        self.transaction_data = pd.DataFrame(self.file[first_day][()])
+        self.last_price = 0  # 为了计算状态空间设置临时至
+        self.margin_pre_lot = 0  # 为了计算状态空间设置临时至
+        self.current_observation_index = 0
+        observation = self._observation()
+        # 设置状态空间
+        self.observation_space = spaces.Box(- float('inf'), float('inf'), observation.shape, dtype=np.float32)
+        # 动作空间（0-观望 1-多 2-空）
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(- float('inf'), float('inf'), (32,), dtype=np.float32)
 
-        self.MAX_HOLD_SECONDS = 300  # 单个合约最长持仓时间（秒数） 5分钟
-        self.MIN_ORDER_VOLUME = 1  # 想要开仓成功订单量的最小阈值
-
-        self.MARGIN_RATE = 0.15  # 保证金率
-        self.COMMISSION_PRE_LOT = 5  # 佣金
-        self.CONTRACT_SIZE = 10  # 合约规模
-
-        self.TIME_ONLY_CLOSE = pd.to_datetime('225500000', format='%H%M%S%f')  # 最后6分钟只平仓不开仓
-        self.TIME_CLOSE_ALL = pd.to_datetime('225900000', format='%H%M%S%f')  # 最后1分钟强平所有然后结束
-
-    def init(self,
-             file_path,  # 数据文件位置
-             capital,  # 初始本金
-             date_start,  # 日期范围 exp:"20220105"
-             date_end,  # 日期范围 exp:"20220106"
-             reward_func=profits_or_loss_reward,  # 回报计算函数
-             fine_func=none_fine,  # 罚金计算函数 （空仓不动可能会有惩罚
-             ):
-        self.capital = capital
-        self.fine_func = fine_func
-
-        self.reward_func = reward_func
-        self.last_reward = 0
-
-        self.file = h5py.File(file_path, 'r')  # 只读打开数据
-
-        self.file_path = file_path
-
-        days = pd.to_datetime(list(self.file.keys()))
-
-        days = days[days.isin(pd.date_range(date_start, date_end))].strftime('%Y%m%d')
-        self.possible_days = days
-
+        """ 输出环境加载信息 """
         days_count = len(days.values)
         logger.info("Environment initialization complete!!! \n---\nFind %d possible days: %s"
                     "\nMargin rate %.2f, commission %d, contract size %d. \nFile path: %s\n---"
                     % (days_count,
-                       str(days.values) if days_count < 10 else (" ".join(str(x) for x in days.values[0:10]) + ' ...'),
+                       str(days.values) if days_count < 10 else (
+                               " ".join(str(x) for x in days.values[0:10]) + ' ...'),
                        self.MARGIN_RATE, self.COMMISSION_PRE_LOT, self.CONTRACT_SIZE, file_path))
 
     def reset(self):
@@ -399,7 +417,10 @@ class GymEnvBase(gym.Env):
         # 可用资金 = 当前权益 - 持仓保证金
         free_margin = amount - margin
         # 风险度 = 保证金 / 当前权益
-        risk = margin / amount
+        if amount == 0:
+            risk = 0
+        else:
+            risk = margin / amount
 
         return {
             'position': position,
