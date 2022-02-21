@@ -31,7 +31,8 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
               agent_name='dqn',
               cwd_suffix=None,
               train_and_evaluate_func=train_and_evaluate_mp,
-              env_name=ENV_NAME):
+              env_name=ENV_NAME,
+              date_start="20211201", date_end="20211231"):
     agent_name = agent_name.lower()
     if agent_name == 'dqn':
         agent = AgentDQN
@@ -57,7 +58,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
         env = gym.make(env_name,
                        capital=20000,
                        file_path=file_path,
-                       date_start="20211201", date_end="20211231",
+                       date_start=date_start, date_end=date_end,
                        reward_func=profits_or_loss_reward,
                        fine_func=linear_fine(0.1)
                        )
