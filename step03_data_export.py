@@ -1,6 +1,10 @@
 """
 导出指定日期开始的主力合约交易数据
 （数据源头是 RQDATA）
+
+依赖包
+pip install h5py hdf5plugin pandas
+
 """
 
 import sys
