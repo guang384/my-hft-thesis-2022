@@ -93,6 +93,8 @@ class GymEnvBase(gym.Env):
         self.transaction_data = None  # 交易数据
         self.time = None  # 当前时间
         self.start_time = None  # 开始时间
+        self.timeout_close_count = None
+        self.undermargined = None
 
         self.current_observation_index = None  # 数据指针 指向当前数据 （从第5分钟（9：05）开始）
         self.max_observation_index = None  # 最大指针
@@ -147,6 +149,8 @@ class GymEnvBase(gym.Env):
             'action': [0],
             'fine': [0]
         }
+        self.timeout_close_count = 0
+        self.undermargined = 0
 
         self.last_reward = self.reward_func(self.records)
 
@@ -255,6 +259,7 @@ class GymEnvBase(gym.Env):
                 open_time, open_index, direction, open_price, close_price, close_time = self.order_list[i]
                 if (self.time - open_time).total_seconds() > self.MAX_HOLD_SECONDS:  # 持仓超过最大持仓时间
                     self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
+                    self.timeout_close_count += 1
                 else:
                     break
         '''
@@ -283,9 +288,7 @@ class GymEnvBase(gym.Env):
         # 状态
         observation = self._observation()
         # 奖励
-        if len(self.order_list) == 0:
-            seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
-            self.fine = self.fine_func(seconds_of_watching)
+        self.fine = self._calculate_the_fine()
         current_reward = self.reward_func(self.records) - self.fine  # 积累奖励等于奖金减去罚款
         reward = current_reward - self.last_reward  # 单步的激励是两次激励的变化量（delta_reward）
         self.last_reward = current_reward
@@ -295,9 +298,11 @@ class GymEnvBase(gym.Env):
         # 附加信息
         info = position_info.copy()
         info['commission'] = self.commission
-        info['trans_count'] = len(self.order_list)
+        info['order_count'] = len(self.order_list)
         info['unclosed_index'] = self.unclosed_order_index
         info['fine'] = self.fine
+        info['timeout'] = self.timeout_close_count
+        info['undermargined'] = self.undermargined
 
         return observation, reward, done, info
 
@@ -327,6 +332,7 @@ class GymEnvBase(gym.Env):
             return
         if not self._can_open_new_position():  # 检查可用资金是否允许开仓
             logger.info("Undermargined ...")
+            self.undermargined += 1
             return
 
         direction = 1
@@ -436,3 +442,10 @@ class GymEnvBase(gym.Env):
         # 更新持仓情况
         position_info = self._position_info()
         return position_info['free_margin'] * 0.8 > self.margin_pre_lot
+
+    def _calculate_the_fine(self):
+        if len(self.order_list) == 0:
+            seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
+            return self.fine_func(seconds_of_watching)
+        else:
+            return 0
