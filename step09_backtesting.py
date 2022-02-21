@@ -36,6 +36,7 @@ def test_model(
         start_date="20220101",
         end_date="20220110",
         file_path="data/dominant_processed_data_20170103_20220215.h5",
+        env_name="TinyMarketGymEnvDaily-v0",
         if_continue=True):
     if not if_continue:
         print('The capital will be reset at the beginning of each day')
@@ -55,13 +56,11 @@ def test_model(
     else:
         raise RuntimeError('unknown agent : ', agent_name)
 
-    env_name = "TinyMarketGymEnvDaily-v0"
-
     def make_env_func(**kwargs):
         env_inner = gym.make(env_name,
                              capital=20000,
                              file_path=file_path,
-                             date_start="20211201", date_end="20211231", )
+                             date_start=start_date, date_end=end_date, )
         return env_inner
 
     tmp_env = make_env_func()
@@ -101,8 +100,8 @@ def test_model(
         episode_return  # 这是最后的收益
         episode_step += 1  # 这是总步数
         # 展示结果
-        print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s "
-              % (episode_return, info['amount'], env.current_day()))
+        print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s\n %s"
+              % (episode_return, info['amount'], env.current_day(),str(info)))
 
         # 交易记录分析
         orders = env.get_order_history()
@@ -120,7 +119,7 @@ def test_model(
                   "Average profit and loss of orders : %.2f | Standard deviation : %.2f"
                   % (len(orders) * 2, total_hold_seconds / len(orders),
                      np.array(profits_or_loss).mean(), np.array(profits_or_loss).std()))
-        # env.render()
+        env.render()
         if if_continue:  # 更新额度
             env.set_capital(info['amount'])
         # 下一天
