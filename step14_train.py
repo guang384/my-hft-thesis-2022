@@ -36,7 +36,13 @@ def custom_observation(self):
     # 获取仓位数据
     position_state = pd.Series(self._position_info())
     # 拼接数据并返回结果
-    return np.array(tuple(transaction_state)[2:] + (position_state['position'], position_state['risk']))
+    return np.array(tuple(transaction_state)[2:]
+                    + (
+                        position_state['position'],
+                        position_state['risk'],
+                        position_state['floating_pl'] / 10,
+                        self.fine / 100)
+                    )
 
 
 class GymEnvRandomIndData(GymEnvRandom):
@@ -44,9 +50,9 @@ class GymEnvRandomIndData(GymEnvRandom):
     def _observation(self):
         return custom_observation(self)
 
-    def _calculate_the_fine(self):  # 直接按照时间惩罚
-        seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
-        return seconds_of_watching
+    def _calculate_the_fine(self):  # 直接按照ticks惩罚
+        ticks_of_watching = (self.current_observation_index - self.min_observation_index) / 2
+        return ticks_of_watching
 
 
 if __name__ == '__main__':

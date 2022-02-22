@@ -96,6 +96,7 @@ class GymEnvBase(gym.Env):
         self.timeout_close_count = None
         self.undermargined = None
 
+        self.min_observation_index = None  # 最小指针（开始时刻的索引
         self.current_observation_index = None  # 数据指针 指向当前数据 （从第5分钟（9：05）开始）
         self.max_observation_index = None  # 最大指针
 
@@ -166,6 +167,7 @@ class GymEnvBase(gym.Env):
         # 选取交易开始的位置
         start_index = self.pick_start_index_and_time_when_reset()
 
+        self.min_observation_index = start_index
         self.current_observation_index = start_index
         self.last_price = self.transaction_data.iloc[self.current_observation_index]['last_price']
         self.margin_pre_lot = self.last_price * self.MARGIN_RATE * self.CONTRACT_SIZE

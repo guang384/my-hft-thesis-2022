@@ -1,40 +1,71 @@
+import os
+import re
+import sys
+from datetime import time
+
 import gym
 import numpy as np
 import torch
 
 import step15_backtest
 import matplotlib.pyplot as plt
-from step17_try_lstm_train import REINFORCE, params_hidden_size, if_gpu
+from step17_try_lstm_train import REINFORCE, params_hidden_size, if_gpu, ENV_NAME
 
 plt.ion()  # 交互模式
 
 
-def backtest(model_path):
+def load_last_backtest(agent, dir):
+    # 加载尚未测试
+    file_names = os.listdir(dir)
+    for name in file_names:
+        match = re.search(r'reinforce-(\d+)\.pkl', name)
+        if match is None:
+            continue
+        index = int(match.group(1))
+        if not os.path.exists(os.path.join(dir, 'backtest-' + str(index) + '.jpg')):
+            # 不存在 需要测试
+            model_path = os.path.join(dir, name)
+            if not os.path.exists(model_path):
+                return None
+            if if_gpu:
+                model_static_dict = torch.load(model_path, map_location=lambda storage, loc: storage.cuda())
+            else:
+                model_static_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
+            agent.model.load_state_dict(model_static_dict)
+            print('Model loaded : ', model_path)
+            return index
+    return None
+
+
+def backtest(dir_suffix=None):
+
+    if dir_suffix is None:
+        working_dir = 'checkpoint_' + ENV_NAME
+    else:
+        working_dir = 'checkpoint_' + ENV_NAME + '_' + dir_suffix
+
     env = gym.make(step15_backtest.ENV_NAME,
                    capital=20000,
                    file_path="data/dominant_reprocessed_data_202111_ind.h5",
-                   date_start="20211115", date_end="20211130")
+                   date_start="20211122", date_end="20211130")
     """ 加载模型 """
     agent = REINFORCE(params_hidden_size, env.observation_space.shape[0], env.action_space)
-    if if_gpu:
-        model_static_dict = torch.load(model_path, map_location=lambda storage, loc: storage.cuda())
-    else:
-        model_static_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
-    agent.model.load_state_dict(model_static_dict)
-    agent.model.eval()
-    print('model loaded.')
+
+    testing_index = load_last_backtest(agent, working_dir)
+    if testing_index is None:
+        return
 
     """ 准备画板 """
+    plt.figure(figsize=(20, 10))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
     """ 开始测试 """
     counter = 0
+    log_price = []
+    log_position = []
+    log_amount = []
     while not env.if_all_days_done():
-
-        log_price = []
-        log_position = []
-        log_amount = []
 
         # 获取第一个状态
         state = torch.Tensor(np.array([env.reset()]))
@@ -47,10 +78,7 @@ def backtest(model_path):
         # 开始回测
         done = False
         episode_return = 0
-        ax1.cla()
-        ax2.cla()
-        ax3.cla()
-        plt.suptitle(env.current_day())
+
         while not done:
             action, log_prob, entropy, hx, cx = agent.select_action(state.unsqueeze(0), hx, cx)
             action = action.cpu()
@@ -77,8 +105,25 @@ def backtest(model_path):
             state = torch.Tensor(np.array([next_state]))
         print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s\n %s"
               % (episode_return, info['amount'], env.current_day(), str(info)))
+        # 下一天
+        env.set_capital(info['amount'])
+        env.reset()
+    plt.suptitle("The final balance is " + str(info['amount']))
+    plt.savefig(os.path.join(working_dir, 'backtest-' + testing_index + '.jpg'))
 
 
 if __name__ == '__main__':
-    backtest(model_path='data/reinforce-800.pkl')
+    if len(sys.argv) == 2:
+        argv_dir_suffix = sys.argv[1]
+        while True:
+            print('try testing ...')
+            backtest(argv_dir_suffix)
+            print('sleeping ...')
+            time.sleep(60)
+    else:
+        while True:
+            print('try testing ...')
+            backtest()
+            print('sleeping ...')
+            time.sleep(60)
     print('Done.')
