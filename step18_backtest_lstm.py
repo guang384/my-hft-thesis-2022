@@ -1,8 +1,7 @@
 import os
 import re
 import sys
-from datetime import time
-
+import time
 import gym
 import numpy as np
 import torch

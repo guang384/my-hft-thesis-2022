@@ -3,7 +3,7 @@
 （数据源头是 RQDATA）
 
 依赖包
-pip install h5py hdf5plugin pandas
+pip install h5py hdf5plugin pandas gym
 
 """
 
