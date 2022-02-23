@@ -1,9 +1,9 @@
 # my-hft-thesis-2022 custom
-data/
-LunarLanderContinuous-v2_*/
-TinyMarketGymEnv*/
-ckpt_*/
-checkpoint_*/
+/data/
+/LunarLanderContinuous-v2_*/
+/TinyMarketGymEnv*/
+/ckpt_*/
+/checkpoint_*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
