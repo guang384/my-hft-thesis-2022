@@ -26,13 +26,14 @@ if ENV_NAME not in env_ids:
 
 class GymEnvRandomRocData(GymEnvRandom):
 
+    # 通过复写修改状态数据
     def _observation(self):
         # 获取交易数据
         transaction_state = self.transaction_data.iloc[self.current_observation_index]  # 前两位是日期数据不要
         # 获取仓位数据
         position_state = pd.Series(self._position_info())
         # 拼接数据并返回结果
-        return np.array(tuple(transaction_state)[2:] + (position_state['position'], position_state['risk']))
+        return np.array(tuple(transaction_state)[2:] + (position_state['position'], float(position_state['risk'])))
 
 
 if __name__ == '__main__':

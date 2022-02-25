@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 
 import pandas as pd
 from gym import logger
@@ -22,15 +23,15 @@ class GymEnvDaily(GymEnvBase):
 
     def if_all_days_done(self):
         if self.current_day_index is None:
-            return False
+            return self.done
         else:
             return self.current_day_index >= len(self.possible_days) - 1 and self.done
 
     def set_capital(self, capital):
-        self.capital = capital
+        self.capital = Decimal(str(capital))
 
     # 从头开始逐日进行
-    def pick_day_when_reset(self):
+    def _pick_day_when_reset(self):
         if self.current_day_index is None:
             self.current_day_index = 0
             return self.possible_days[self.current_day_index]
@@ -43,11 +44,11 @@ class GymEnvDaily(GymEnvBase):
             return self.possible_days[self.current_day_index]
 
     # 从头开始
-    def pick_start_index_and_time_when_reset(self):
+    def _pick_start_index_and_time_when_reset(self):
         return 600
 
     # 直到收盘才结束 (不能开仓了且已经清仓
-    def if_done_when_step(self):
+    def _if_done_when_step(self):
         if_no_money = self.current_position == 0 and not self._can_open_new_position()
         if_no_time = self.current_position == 0 and self.time > self.TIME_ONLY_CLOSE
         if_current_day_end = self.current_observation_index >= self.max_observation_index

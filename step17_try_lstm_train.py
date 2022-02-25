@@ -1,4 +1,4 @@
-import argparse, math, os, sys
+import math, os, sys
 import re
 import timeit
 
@@ -18,9 +18,11 @@ import torch.nn.utils as utils
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from tiny_market import profits_or_loss_reward, linear_fine
 
-plt.ion()  # 交互模式
+if_plot = False
+
+if if_plot:
+    plt.ion()  # 交互模式
 
 """ 参数"""
 if_display = False
@@ -32,6 +34,7 @@ params_num_episodes = 10000
 params_max_steps = 10000
 params_checkpoint_frequency = 100
 params_gamma = 0.99
+random.seed(timeit.default_timer())
 params_seed = random.randint(0, 2 ** 32 - 1)
 
 """ 初始化环境 """
@@ -45,7 +48,7 @@ if ENV_NAME not in env_ids:
     register(
         id=ENV_NAME,
         entry_point='step14_train:GymEnvRandomIndData',
-        max_episode_steps=1800,  # 一个episode最大步数
+        max_episode_steps=1200,  # 一个episode最大步数
         reward_threshold=10000.0,
     )
 
@@ -55,11 +58,9 @@ if ENV_NAME not in env_ids:
 
 def make_env_func(**kwargs):
     env_inner = gym.make(ENV_NAME,
-                         capital=20000,
+                         capital=20000,fine_pre_seconds=1.2,
                          file_path="data/dominant_reprocessed_data_202111_ind.h5",
                          date_start="20211101", date_end="20211121",
-                         reward_func=profits_or_loss_reward,
-                         fine_func=linear_fine(1)
                          )
     return env_inner
 
@@ -249,20 +250,6 @@ def train(dir_suffix=None):
 
             if done:
                 break
-
-        discount_factor = 0.95
-        for i in range(1, len(actions)):  # 为了鼓励动作 动作导致仓位有变化 则损失打折，  动作没有带来仓位有变化 盈利打折
-            if positions[i] - positions[i - 1] != 0:
-                if actions[i] != 0 and rewards[i] < 0:
-                    rewards[i] *= discount_factor
-            else:
-                if rewards[i] > 0:
-                    rewards[i] *= discount_factor
-                    if actions[i] != 0:  # 乱作动作 多惩罚
-                        rewards[i] *= discount_factor
-                else:
-                    if actions[i] != 0:  # 乱作动作 多惩罚
-                        rewards[i] /= discount_factor
 
         # episode结束，开始训练
         new_loss = agent.update_parameters(rewards, log_probs, entropies, params_gamma)

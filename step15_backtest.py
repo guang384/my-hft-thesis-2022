@@ -5,18 +5,14 @@ import sys
 
 import numpy as np
 import pandas as pd
-from gym import spaces, register
+from gym import register
 
-from tiny_market import GymEnvRandom
-from step08_train_model import try_train
-from step10_statistics_execution_time import train_and_evaluate_mp_async_timed
 from gym import envs
 from step09_backtesting import test_model
-from step14_train import custom_observation
 from tiny_market import GymEnvDaily
 from gym import logger
 import matplotlib.pyplot as plt
-
+from step14_train import GymEnvFeatureScaling
 
 ENV_NAME = 'TinyMarketGymEnvDailyInd-v0'
 
@@ -32,10 +28,7 @@ if ENV_NAME not in env_ids:
     )
 
 
-class GymEnvDailyIndData(GymEnvDaily):
-
-    def _observation(self):
-        return custom_observation(self)
+class GymEnvDailyIndData(GymEnvFeatureScaling, GymEnvDaily):
 
     def render(self, mode="human"):
         logger.info("You render the env")
@@ -62,7 +55,7 @@ if __name__ == '__main__':
                    env_name=ENV_NAME,
                    file_path="data/dominant_reprocessed_data_202111_ind.h5")
     else:
-        test_model(actor_path='data/modelDQN/actor_23688289_-0003.281.pth',
+        test_model(actor_path='TinyMarketGymEnvRandomInd-v0_DQN_0/actor_00001042_-4700.334.pth',
                    agent_name='dqn',
                    start_date="20211122",
                    end_date="20211127",

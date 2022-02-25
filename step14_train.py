@@ -1,14 +1,16 @@
 """
 基于新数据进行训练
 """
+
 import numpy as np
 import pandas as pd
-from gym import spaces, register
-
-from tiny_market import GymEnvRandom, GymEnvDaily
+from gym import register
 from step08_train_model import try_train
 from step10_statistics_execution_time import train_and_evaluate_mp_async_timed
 from gym import envs
+
+from tiny_market import GymEnvFeatureScaling, GymEnvRandom, GymEnvLongAndShortImbalanceWillResult, \
+    GymEnvWaitAndSeeWillResultInFines
 
 ENV_NAME = 'TinyMarketGymEnvRandomInd-v0'
 
@@ -24,35 +26,11 @@ if ENV_NAME not in env_ids:
     )
 
 
-def custom_observation(self):
-    # 获取交易数据
-    transaction_state = self.transaction_data.iloc[self.current_observation_index].copy()  # 前两位是日期数据不要
-    # 缩放量价信息数据到10以内
-    transaction_state['last_price'] = transaction_state['last_price'] / 1000
-    transaction_state['ask'] = transaction_state['ask'] / 1000
-    transaction_state['bid'] = transaction_state['bid'] / 1000
-    transaction_state['ask_volume'] = transaction_state['ask_volume'] / 100
-    transaction_state['bid_volume'] = transaction_state['bid_volume'] / 100
-    # 获取仓位数据
-    position_state = pd.Series(self._position_info())
-    # 拼接数据并返回结果
-    return np.array(tuple(transaction_state)[2:]
-                    + (
-                        position_state['position'],
-                        position_state['risk'],
-                        position_state['floating_pl'] / 10,
-                        self.fine / 100)
-                    )
-
-
-class GymEnvRandomIndData(GymEnvRandom):
-
-    def _observation(self):
-        return custom_observation(self)
-
-    def _calculate_the_fine(self):  # 直接按照ticks惩罚
-        ticks_of_watching = (self.current_observation_index - self.min_observation_index) / 2
-        return ticks_of_watching
+# 依赖关系是从左往右（先调用自己内部的然后遇到super从左往右，直到没有super为止
+class GymEnvRandomIndData(GymEnvLongAndShortImbalanceWillResult,
+                          GymEnvWaitAndSeeWillResultInFines,
+                          GymEnvFeatureScaling, GymEnvRandom):
+    pass
 
 
 if __name__ == '__main__':

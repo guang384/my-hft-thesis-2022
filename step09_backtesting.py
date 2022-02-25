@@ -17,7 +17,6 @@ from elegantrl.config import get_gym_env_args, Arguments
 from gym import register
 
 from elegantrl import config
-from tiny_market import linear_fine
 import numpy as np
 
 register(
@@ -101,7 +100,7 @@ def test_model(
         episode_step += 1  # 这是总步数
         # 展示结果
         print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s\n %s"
-              % (episode_return, info['amount'], env.current_day(),str(info)))
+              % (episode_return, info['amount'], env.current_day(), str(info)))
 
         # 交易记录分析
         orders = env.get_order_history()
@@ -163,4 +162,4 @@ if __name__ == '__main__':
                    end_date=argv_test_end_date,
                    if_continue=argv_if_continue.lower() == 'true')
     else:
-        test_model("data_sample/tiny_market_actor_avgR_4.00.pth")
+        test_model("TinyMarketGymEnvRandomFineWatching-v0_DQN_0/actor_00000627_-0049.725.pth")

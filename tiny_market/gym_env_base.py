@@ -1,5 +1,6 @@
 import random
 import timeit
+from decimal import Decimal
 
 import h5py
 import hdf5plugin
@@ -11,31 +12,41 @@ from gym import spaces
 
 import matplotlib.pyplot as plt
 import os
-from .reward_and_fine_calculation import profits_or_loss_reward, none_fine
+from decimal import getcontext
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 pd.set_option('display.float_format', lambda x: '%.10f' % x)  # 为了直观的显示数字，不采用科学计数法
 
+getcontext().prec  # 设置Decimal精度
+
 
 class GymEnvBase(gym.Env):
 
-    def pick_day_when_reset(self):
+    def _pick_day_when_reset(self):
         raise NotImplementedError
 
-    def pick_start_index_and_time_when_reset(self):
+    def _pick_start_index_and_time_when_reset(self):
         raise NotImplementedError
 
-    def if_done_when_step(self):
+    def _if_done_when_step(self):
         raise NotImplementedError
+
+    # 直接以收益作为奖励
+    def _calculate_reward(self):
+        return self.records['amount'][-1] - self.records['amount'][-2]
 
     def __init__(self, **kwargs):
+        random.seed(timeit.default_timer())
+        params_seed = random.randint(0, 2 ** 32 - 1)
+        # Gym、numpy、Pytorch都要设置随机数种子
+        super(GymEnvBase, self).seed(params_seed)
         """ 一些常量 """
         self.MAX_HOLD_SECONDS = 300  # 单个合约最长持仓时间（秒数） 5分钟
         self.MIN_ORDER_VOLUME = 1  # 想要开仓成功订单量的最小阈值
 
-        self.MARGIN_RATE = 0.15  # 保证金率
-        self.COMMISSION_PRE_LOT = 5  # 佣金
+        self.MARGIN_RATE = Decimal('0.12')  # 金鹏保证金率
+        self.COMMISSION_PRE_LOT = Decimal('3.3')  # 金鹏单手日内佣金
         self.CONTRACT_SIZE = 10  # 合约规模
 
         self.TIME_ONLY_CLOSE = pd.to_datetime('225500000', format='%H%M%S%f')  # 最后6分钟只平仓不开仓
@@ -53,19 +64,7 @@ class GymEnvBase(gym.Env):
         date_end = kwargs['date_end']
 
         file_path = kwargs['file_path']
-        capital = kwargs['capital']
-
-        """ 选填参数 """
-        # 回报计算函数
-        if 'reward_func' in kwargs.keys() and callable(kwargs['reward_func']):
-            reward_func = kwargs['reward_func']
-        else:
-            reward_func = profits_or_loss_reward
-        # 罚金计算函数 （空仓不动可能会有惩罚
-        if 'fine_func' in kwargs.keys() and callable(kwargs['fine_func']):
-            fine_func = kwargs['fine_func']
-        else:
-            fine_func = none_fine
+        capital = Decimal(str(kwargs['capital']))
 
         """ 初始化参数 """
         self.file = h5py.File(file_path, 'r')  # 只读打开数据
@@ -73,34 +72,30 @@ class GymEnvBase(gym.Env):
         days = days[days.isin(pd.date_range(date_start, date_end))].strftime('%Y%m%d')
         self.possible_days = days  # 可选的交易日
 
-        self.fine_func = fine_func
-        self.reward_func = reward_func
-
         self.done = False
         self.capital = capital  # 本金
-        self.last_reward = 0  # 前一步的奖励
-        self.fine = 0  # 罚金 （空仓观望会有罚金
-        self.closed_pl = 0  # 平仓盈亏 Closed Trade P/L
-        self.commission = 0  # 已花费手续费
+        self.closed_pl = Decimal('0')  # 平仓盈亏 Closed Trade P/L
+        self.commission = Decimal('0')  # 已花费手续费
 
         # 持仓信息  list Tuple(open_time, open_index, direction, open_price, close_price, close_time)
         self.order_list = []
         self.unclosed_order_index = 0
 
         self.current_position = 0  # 当前头寸 多头>0 空头<0 空仓=0
-        self.margin_pre_lot = None  # 当前每手保证金
-        self.last_price = None  # 当前最新价
+        self.margin_pre_lot = Decimal('0')  # 当前每手保证金
+        self.last_price = Decimal('0')  # 当前最新价
         self.transaction_data = None  # 交易数据
         self.time = None  # 当前时间
         self.start_time = None  # 开始时间
+        self.seconds_from_start = 0
         self.timeout_close_count = None
-        self.undermargined = None
+        self.undermargined_count = None
 
         self.min_observation_index = None  # 最小指针（开始时刻的索引
         self.current_observation_index = None  # 数据指针 指向当前数据 （从第5分钟（9：05）开始）
         self.max_observation_index = None  # 最大指针
 
-        self.records = {
+        self.records = {  # 交易过程记录
             'amount': [],
             'position': [],
             'risk': [],
@@ -111,8 +106,8 @@ class GymEnvBase(gym.Env):
         first_day = self.possible_days[0]  # 随便取一天
         # 获取一个状态数据以便设置状态空间
         self.transaction_data = pd.DataFrame(self.file[first_day][()])
-        self.last_price = 0  # 为了计算状态空间设置临时至
-        self.margin_pre_lot = 0  # 为了计算状态空间设置临时至
+        self.last_price = Decimal('0')  # 为了计算状态空间设置临时至
+        self.margin_pre_lot = Decimal('0')  # 为了计算状态空间设置临时至
         self.current_observation_index = 0
         observation = self._observation()
         # 设置状态空间
@@ -132,9 +127,8 @@ class GymEnvBase(gym.Env):
     def reset(self):
         random.seed(timeit.default_timer())
         self.done = False
-        self.fine = 0
-        self.closed_pl = 0
-        self.commission = 0
+        self.closed_pl = Decimal('0')
+        self.commission = Decimal('0')
 
         del self.order_list
         self.order_list = []
@@ -148,15 +142,12 @@ class GymEnvBase(gym.Env):
             'position': [0],
             'risk': [0.],
             'action': [0],
-            'fine': [0]
         }
         self.timeout_close_count = 0
-        self.undermargined = 0
-
-        self.last_reward = self.reward_func(self.records)
+        self.undermargined_count = 0
 
         # 选取日期
-        day = self.pick_day_when_reset()
+        day = self._pick_day_when_reset()
         # 加载数据
         self.transaction_data = pd.DataFrame(self.file[day][()])
 
@@ -165,21 +156,18 @@ class GymEnvBase(gym.Env):
         self.max_observation_index = len(self.transaction_data) - 1
 
         # 选取交易开始的位置
-        start_index = self.pick_start_index_and_time_when_reset()
+        start_index = self._pick_start_index_and_time_when_reset()
 
         self.min_observation_index = start_index
         self.current_observation_index = start_index
-        self.last_price = self.transaction_data.iloc[self.current_observation_index]['last_price']
-        self.margin_pre_lot = self.last_price * self.MARGIN_RATE * self.CONTRACT_SIZE
+        self.last_price = Decimal(str(self.transaction_data.iloc[self.current_observation_index]['last_price']))
+        self.margin_pre_lot = Decimal(str(self.last_price)) * self.MARGIN_RATE * self.CONTRACT_SIZE
         self.start_time = pd.to_datetime(str(int(self.transaction_data.iloc[start_index]['time'])), format='%H%M%S%f')
+        self.seconds_from_start = 0
         logger.info("| --> Market start at : %s" % self.start_time.strftime('%X'))
 
         observation = self._observation()
-
         return observation
-
-    def set_capital(self, capital):
-        self.capital = capital
 
     '''
     Actions:
@@ -207,20 +195,20 @@ class GymEnvBase(gym.Env):
         current_transaction_data = self.transaction_data.iloc[self.current_observation_index]
 
         # 最新价
-        self.last_price = current_transaction_data['last_price']
+        self.last_price = Decimal(str(current_transaction_data['last_price']))
         # 最新每手保证金
-        self.margin_pre_lot = self.last_price * self.MARGIN_RATE * self.CONTRACT_SIZE
+        self.margin_pre_lot = Decimal(str(self.last_price)) * self.MARGIN_RATE * self.CONTRACT_SIZE
         # 当前时刻
         self.time = pd.to_datetime(str(int(current_transaction_data['time'])), format='%H%M%S%f')
-
+        self.seconds_from_start = (self.time - self.start_time).total_seconds()
         # 挂单量
         ask_volume = current_transaction_data['ask_volume']
         bid_volume = current_transaction_data['bid_volume']
 
         # 市价单 可成交卖价 （当前tick 和下一tick 高价）
-        market_ask_price = max(last_transaction_data['ask'], current_transaction_data['ask'])
+        market_ask_price = Decimal(str(max(last_transaction_data['ask'], current_transaction_data['ask'])))
         # 市价单 可成交买价 （当前tick 和下一tick 低价）
-        market_bid_price = min(last_transaction_data['bid'], current_transaction_data['bid'])
+        market_bid_price = Decimal(str(min(last_transaction_data['bid'], current_transaction_data['bid'])))
 
         '''
         调仓
@@ -288,24 +276,24 @@ class GymEnvBase(gym.Env):
         返回 ：状态，奖励，是否完成，和其他信息（持仓情况）
         '''
         # 状态
+        # observation (object): agent's observation of the current environment
         observation = self._observation()
         # 奖励
-        self.fine = self._calculate_the_fine()
-        current_reward = self.reward_func(self.records) - self.fine  # 积累奖励等于奖金减去罚款
-        reward = current_reward - self.last_reward  # 单步的激励是两次激励的变化量（delta_reward）
-        self.last_reward = current_reward
+        # reward (float) : amount of reward returned after previous action
+        reward = float(self._calculate_reward())
         # 是否完成，如果完成了就一直完成状态
-        done = self.if_done_when_step() or self.done
+        # done (bool): whether the episode has ended, in which case further step() calls will return undefined results
+        done = self._if_done_when_step() or self.done
         self.done = done
         # 附加信息
+        # info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         info = position_info.copy()
         info['commission'] = self.commission
         info['order_count'] = len(self.order_list)
         info['unclosed_index'] = self.unclosed_order_index
-        info['fine'] = self.fine
         info['timeout'] = self.timeout_close_count
-        info['undermargined'] = self.undermargined
-
+        info['undermargined'] = self.undermargined_count
+        info = self._decimal_to_float(info)
         return observation, reward, done, info
 
     def get_order_history(self):
@@ -323,6 +311,10 @@ class GymEnvBase(gym.Env):
         ax4.plot(self.records['position'])
         plt.show()
 
+    def close(self):
+        self.file.close()
+        del self.file
+
     def _open_long(self, ask_price, ask_volume):
         if ask_volume < self.MIN_ORDER_VOLUME:  # 订单量不足
             logger.info('Insufficient order quantity.')
@@ -334,7 +326,7 @@ class GymEnvBase(gym.Env):
             return
         if not self._can_open_new_position():  # 检查可用资金是否允许开仓
             logger.info("Undermargined ...")
-            self.undermargined += 1
+            self.undermargined_count += 1
             return
 
         direction = 1
@@ -345,7 +337,7 @@ class GymEnvBase(gym.Env):
                                 ask_price,
                                 None,
                                 None))  # 开多
-        self.commission += self.COMMISSION_PRE_LOT  # 手续费
+        self.commission = self.commission + self.COMMISSION_PRE_LOT  # 手续费
         logger.info("[%s] Open long on %d" % (self.time.strftime('%X'), ask_price))
 
     def _open_short(self, bid_price, bid_volume):
@@ -368,7 +360,7 @@ class GymEnvBase(gym.Env):
                                 bid_price,
                                 None,
                                 None))  # 开空
-        self.commission += self.COMMISSION_PRE_LOT  # 手续费
+        self.commission = self.commission + self.COMMISSION_PRE_LOT  # 手续费
         logger.info("[%s] Open short on %d" % (self.time.strftime('%X'), bid_price))
 
     # 平最早的一单
@@ -401,7 +393,7 @@ class GymEnvBase(gym.Env):
         # 获取交易数据
         transaction_state = self.transaction_data.iloc[self.current_observation_index]  # 前两位是日期数据不要
         # 获取仓位数据
-        position_state = pd.Series(self._position_info())
+        position_state = pd.Series(self._decimal_to_float(self._position_info()))
         # 拼接数据并返回结果
         return np.array(tuple(transaction_state)[2:] + tuple(position_state))  # 前两位是日期数据不要
 
@@ -411,7 +403,7 @@ class GymEnvBase(gym.Env):
         # 仓位
         position = 0
         # 持仓盈亏 Floating P/L
-        floating_pl = 0  # 利润
+        floating_pl = Decimal('0')  # 利润
         for i in range(self.unclosed_order_index, len(self.order_list)):
             # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
             _, _, direction, open_price, _, _ = self.order_list[i]
@@ -443,11 +435,14 @@ class GymEnvBase(gym.Env):
     def _can_open_new_position(self):
         # 更新持仓情况
         position_info = self._position_info()
-        return position_info['free_margin'] * 0.8 > self.margin_pre_lot
+        return position_info['free_margin'] * Decimal('0.8') > self.margin_pre_lot
 
-    def _calculate_the_fine(self):
-        if len(self.order_list) == 0:
-            seconds_of_watching = np.timedelta64(self.time - self.start_time, 's').astype('int')
-            return self.fine_func(seconds_of_watching)
-        else:
-            return 0
+    @staticmethod
+    def _decimal_to_float(dict_of_decimal):
+        ret = {}
+        for key in dict_of_decimal:
+            if isinstance(dict_of_decimal[key], Decimal):
+                ret[key] = float(dict_of_decimal[key])
+            else:
+                ret[key] = dict_of_decimal[key]
+        return ret

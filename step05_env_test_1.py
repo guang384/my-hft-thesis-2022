@@ -9,28 +9,38 @@ import sys
 import random
 
 import gym
-from gym import register
+from gym import register, envs
+from tiny_market import GymEnvDaily, GymEnvWaitAndSeeWillResultInFines
 
-from tiny_market import linear_fine
+ENV_NAME = 'TinyMarketGymEnvDailyFineWatching-v0'
+all_envs = envs.registry.all()
+env_ids = [env_spec.id for env_spec in all_envs]
+if ENV_NAME not in env_ids:
+    register(
+        id=ENV_NAME,
+        entry_point='step05_env_test_1:GymEnvDailyFineWatching',
+        max_episode_steps=50000,  # 一个episode最大步数
+        reward_threshold=10000.0,
+    )
 
-register(
-    id='TinyMarketGymEnvDaily-v0',
-    entry_point='tiny_market:GymEnvDaily',
-    max_episode_steps=50000,  # 一个episode最大步数
-    reward_threshold=1000000.0,
-)
+
+class GymEnvDailyFineWatching(GymEnvDaily, GymEnvWaitAndSeeWillResultInFines):
+    pass
 
 
 def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
-    env = gym.make('TinyMarketGymEnvDaily-v0',
+    env = gym.make(ENV_NAME,
                    capital=20000,
+                   fine_pre_seconds=1,
                    file_path=file_path,
-                   date_start="20211001", date_end="20211231",
-                   fine_func=linear_fine(1))
+                   date_start="20211001", date_end="20211231")
 
     env.reset()
     print("Day : ", env.current_day())
 
+    actions = []
+    rewards = []
+    total_reward = 0
     done = False
     while not done:
         rand = random.randint(0, 100)
@@ -39,8 +49,14 @@ def run_test(file_path="data/dominant_processed_data_20170103_20220215.h5"):
             action = 1
         elif rand < 5:
             action = 2
+        actions.append(action)
         ob, reward, done, info = env.step(action)
+        rewards.append(reward)
+        total_reward = round(total_reward + reward, 1)
+    print(info)
+    print(total_reward)
     env.render()
+    env.close()
 
 
 if __name__ == '__main__':

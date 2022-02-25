@@ -3,11 +3,15 @@
 """
 
 import multiprocessing as mp
+import os
 import sys
+import time
 import timeit
 
 import torch
-from elegantrl.run import PipeEvaluator, PipeLearner, process_safely_terminate, init_agent, PipeWorker, init_buffer
+from elegantrl.config import build_env
+from elegantrl.run import PipeEvaluator, PipeLearner, process_safely_terminate, init_agent, PipeWorker, init_buffer, \
+    init_evaluator
 from step08_train_model import try_train
 
 
@@ -17,7 +21,7 @@ def train_and_evaluate_mp_async_timed(args):
     process = list()
     mp.set_start_method(method='spawn', force=True)  # force all the multiprocessing to 'spawn' methods
 
-    evaluator_pipe = PipeEvaluator()
+    evaluator_pipe = MultiRemindersPipeEvaluator()
     process.append(mp.Process(target=evaluator_pipe.run, args=(args,)))
 
     worker_pipe = PipeWorkerAsync(args.worker_num)
@@ -30,6 +34,55 @@ def train_and_evaluate_mp_async_timed(args):
     [p.start() for p in process]
     process[-1].join()  # waiting for learner
     process_safely_terminate(process)
+
+
+""" 针对训练完成进行多次提醒 """
+""" Multiple reminders for the completion of the training """
+
+
+class MultiRemindersPipeEvaluator(PipeEvaluator):
+
+    def run(self, args):
+        torch.set_grad_enabled(False)
+        gpu_id = args.learner_gpus
+
+        '''init'''
+        agent = init_agent(args, gpu_id)
+        evaluator = init_evaluator(args, gpu_id)
+
+        '''loop'''
+        cwd = args.cwd
+        act = agent.act
+        break_step = args.break_step
+        if_allow_break = args.if_allow_break
+        del args
+
+        if_save = False
+        if_train = True
+        if_reach_goal = False
+        temp = 0  # todo
+        while if_train:
+            act_dict, steps, r_exp, logging_tuple = self.pipe0.recv()
+            if act_dict:
+                act.load_state_dict(act_dict)
+                if_reach_goal, if_save = evaluator.evaluate_save_and_plot(act, steps, r_exp, logging_tuple)
+
+                temp += 1
+                if temp == 4:  # todo
+                    temp = 0
+                    torch.save(act.state_dict(), f"{cwd}/actor_{evaluator.total_step:09}.pth")  # todo
+            else:
+                evaluator.total_step += steps
+
+            if_train = not ((if_allow_break and if_reach_goal)
+                            or evaluator.total_step > break_step
+                            or os.path.exists(f'{cwd}/stop'))
+            self.pipe0.send((if_train, if_save))
+        print(f'| UsedTime: {time.time() - evaluator.start_time:>7.0f} | SavedDir: {cwd}')
+
+        while True:  # wait for the forced stop from main process
+            self.pipe0.recv()  # 防止send阻塞后卡死
+            self.pipe0.send((False, False))
 
 
 class TimeitPipeLearner(PipeLearner):
@@ -45,10 +98,6 @@ class TimeitPipeLearner(PipeLearner):
 
         '''loop'''
         loop_counter = 0
-        total_explore = 0
-        total_update_buffer = 0
-        total_update_net = 0
-        total_evaluate = 0
         if_train = True
         while if_train:
             start = timeit.default_timer()
@@ -76,7 +125,7 @@ class TimeitPipeLearner(PipeLearner):
                     sample_rounds = int(1 + buffer.now_len * args.repeat_times / args.batch_size)
                     print("Train loop %d, New steps %d (%.2f%%), "
                           "Buffed %d (%.2f%%), UpdNet sampled %d rounds. "
-                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs (%.6fs/r), Eva %.4fs )"
+                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs (%.6fs/r), Eva %.4fs ) if_train=%s"
                           % (loop_counter,
                              steps,
                              (steps / buffer.now_len) * 100,
@@ -88,17 +137,17 @@ class TimeitPipeLearner(PipeLearner):
                              update_buffer_time,
                              update_net_time,
                              update_net_time / sample_rounds,
-                             evaluate_time))
+                             evaluate_time, str(if_train)))
                 except AttributeError:
                     print("Train loop %d, New steps %d , "
-                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs, Eva %.4fs )"
+                          "Time %.4fs ( Exp %.4fs, UpdBuf %.4fs, UpdNet %.4fs, Eva %.4fs ) if_train=%s"
                           % (loop_counter,
                              steps,
                              total_time,
                              explore_time,
                              update_buffer_time,
                              update_net_time,
-                             evaluate_time))
+                             evaluate_time, str(if_train)))
         agent.save_or_load_agent(args.cwd, if_save=True)
         print(f'| Learner: Save in {args.cwd}')
 
@@ -111,6 +160,7 @@ class PipeWorkerAsync(PipeWorker):
     def __init__(self, worker_num):
         super().__init__(worker_num)
         self.exploring_act_dict = None
+        self._closed = False
 
     def explore(self, agent):
         act_dict = agent.act.state_dict()
@@ -119,16 +169,35 @@ class PipeWorkerAsync(PipeWorker):
             for worker_id in range(self.worker_num):
                 self.pipe1s[worker_id].send(act_dict)
             self.exploring_act_dict = act_dict
-
         # 异步接受探索
         traj_lists = [pipe1.recv() for pipe1 in self.pipe1s]
-
         # 提前发起一次探索
         for worker_id in range(self.worker_num):
             self.pipe1s[worker_id].send(act_dict)
         self.exploring_act_dict = act_dict
 
         return traj_lists
+
+    def run(self, args, worker_id):
+        torch.set_grad_enabled(False)
+        gpu_id = args.learner_gpus
+
+        '''init'''
+        env = build_env(args.env, args.env_func, args.env_args)
+        agent = init_agent(args, gpu_id, env)
+
+        '''loop'''
+        target_step = args.target_step
+        if args.if_off_policy:
+            trajectory = agent.explore_env(env, args.target_step)
+            self.pipes[worker_id][0].send(trajectory)
+        del args
+
+        while True:
+            act_dict = self.pipes[worker_id][0].recv()
+            agent.act.load_state_dict(act_dict)
+            trajectory = agent.explore_env(env, target_step)
+            self.pipes[worker_id][0].send(trajectory)
 
 
 if __name__ == '__main__':

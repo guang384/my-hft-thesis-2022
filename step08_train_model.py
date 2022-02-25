@@ -7,22 +7,30 @@ import sys
 
 from elegantrl.agent import AgentDQN, AgentDoubleDQN, AgentD3QN, AgentDiscretePPO
 from elegantrl.config import get_gym_env_args, Arguments
-from elegantrl.run import train_and_evaluate, train_and_evaluate_mp
+from elegantrl.run import train_and_evaluate_mp
 
 import gym
-from gym import register
+from gym import register, envs
 from gym.vector.utils import CloudpickleWrapper
 
-from tiny_market import profits_or_loss_reward, linear_fine
+from tiny_market import GymEnvRandom
+from tiny_market import GymEnvWaitAndSeeWillResultInFines
 
-ENV_NAME = 'TinyMarketGymEnvRandom-v0'
+ENV_NAME = 'TinyMarketGymEnvRandomFineWatching-v0'
+all_envs = envs.registry.all()
+env_ids = [env_spec.id for env_spec in all_envs]
+if ENV_NAME not in env_ids:
+    register(
+        id=ENV_NAME,
+        entry_point='step08_train_model:GymEnvRandomFineWatching',
+        max_episode_steps=100,  # 一个episode最大步数
+        reward_threshold=10000.0,
+    )
 
-register(
-    id=ENV_NAME,
-    entry_point='tiny_market:GymEnvRandom',
-    max_episode_steps=3600,  # 一个episode最大步数
-    reward_threshold=1000000.0,
-)
+
+class GymEnvRandomFineWatching(GymEnvRandom, GymEnvWaitAndSeeWillResultInFines):
+    pass
+
 
 gym.logger.set_level(40)  # Block warning
 
@@ -57,10 +65,9 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     def make_env_func(**kwargs):
         env = gym.make(env_name,
                        capital=20000,
+                       fine_pre_seconds=2,
                        file_path=file_path,
-                       date_start=date_start, date_end=date_end,
-                       reward_func=profits_or_loss_reward,
-                       fine_func=linear_fine(0.1)
+                       date_start=date_start, date_end=date_end
                        )
         return env
 
@@ -96,7 +103,7 @@ def try_train(file_path="data/dominant_processed_data_20170103_20220215.h5",
     #   一个进程用来Evaluation
     #   N个Worker进程用来和环境交互获得trajectory
     # 文档注释：  rollout workers number pre GPU (adjust it to get high GPU usage)
-    args.worker_num = 2  # for PC
+    args.worker_num = 1  # for PC
     # args.worker_num = 8  # for Nvidia 3090 24G
 
     '''
