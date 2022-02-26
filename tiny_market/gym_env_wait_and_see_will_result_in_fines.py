@@ -1,6 +1,7 @@
 import os
 from decimal import Decimal
 
+import numpy as np
 import pandas as pd
 from gym import logger
 
@@ -38,6 +39,10 @@ class GymEnvWaitAndSeeWillResultInFines(GymEnvBase):
         observation, reward, done, info = super().step(action)
         info['total_fine'] = self.total_fine
         return observation, reward, done, info
+
+    def _observation(self):
+        ob = super()._observation()
+        return np.array(ob + float(self.total_fine/10))
 
     def _calculate_reward(self):
         reward = super()._calculate_reward()
