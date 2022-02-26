@@ -22,7 +22,7 @@ class GymEnvDoneIfOrderTimeout(GymEnvBase):
         return np.append(ob, timeout_risk)
 
     def _if_done_when_step(self):
-        if self.timeout_close_count > 0:
+        if self.mode == 'Random' and self.timeout_close_count > 0:  # 随机模式下触发 一般 随机模式是训练 日常模式是回测
             self.huge_blow = True
             return True  # 如果有超时单 直接结束
         return super(GymEnvDoneIfOrderTimeout, self)._if_done_when_step()

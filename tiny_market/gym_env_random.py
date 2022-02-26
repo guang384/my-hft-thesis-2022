@@ -12,6 +12,9 @@ pd.set_option('display.float_format', lambda x: '%.10f' % x)  # 为了直观的�
 
 
 class GymEnvRandom(GymEnvBase):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mode = 'Random'
 
     # 随机选择日期
     def _pick_day_when_reset(self):

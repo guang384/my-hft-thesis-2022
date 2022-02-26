@@ -21,7 +21,7 @@ class GymEnvDoneIfUndermargined(GymEnvBase):
         return np.append(ob, float(adequacy))
 
     def _if_done_when_step(self):
-        if self.undermargined_count > 0:
+        if self.mode == 'Random' and self.undermargined_count > 0:  # 随机模式下触发 一般 随机模式是训练 日常模式是回测
             self.huge_blow = True
             return True  # 如果保证金不足还想开仓 直接结束
         return super(GymEnvDoneIfUndermargined, self)._if_done_when_step()

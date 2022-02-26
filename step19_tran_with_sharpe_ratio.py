@@ -21,13 +21,14 @@ if if_plot_ion:
 
 if_gpu = torch.cuda.is_available()
 
-params_hidden_size = 128
+params_hidden_size = 256
 params_num_episodes = 10000
-params_max_steps = 10000
-params_checkpoint_frequency = 100
+params_max_steps = 1000000
+params_checkpoint_frequency = 500
 params_gamma = 0.99
 random.seed(timeit.default_timer())
 params_seed = random.randint(0, 2 ** 32 - 1)
+params_fine_pre_seconds = 0.5
 
 ''' 定义环境类 '''
 
@@ -71,7 +72,7 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
     # 创建环境
     env = gym.make(env_name,
                    capital=20000,
-                   fine_pre_seconds=0.5,
+                   fine_pre_seconds=params_fine_pre_seconds,
                    file_path="data/dominant_reprocessed_data_202111_ind.h5",
                    date_start="20211101", date_end="20211121",
                    )
@@ -101,8 +102,10 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
     ax3.set_ylabel(r"Model loss")
     plt.grid(ls='--')
 
+    best_loss = -100000
+
     # 开始训练
-    for i_episode in range(0, params_num_episodes):
+    for i_episode in range(1, params_num_episodes):
         plt.suptitle(" Progress : %2.f%% " % ((i_episode / params_num_episodes) * 100))
         # 重置环境
         state = torch.Tensor(np.array([env.reset()]))
@@ -142,12 +145,23 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
         # episode结束，开始训练
         new_loss = agent.update_parameters(rewards, log_probs, entropies, params_gamma)
 
+        if new_loss > best_loss:
+            best_loss = new_loss
+            torch.save(agent.model.state_dict(),
+                       os.path.join(working_dir,
+                                    'finePS_' + str(params_fine_pre_seconds)
+                                    + '_episode_' + str(i_episode)
+                                    + '_best_loss_' + str(best_loss) + '.pkl'))
+
         # 到达检测点 记录模型
         if i_episode % params_checkpoint_frequency == 0:
             # 保存模型
-            torch.save(agent.model.state_dict(), os.path.join(working_dir, 'reinforce-' + str(i_episode) + '.pkl'))
+            torch.save(agent.model.state_dict(),
+                       os.path.join(working_dir,
+                                    'ckp-' + str(i_episode) + 'finePS_' + str(params_fine_pre_seconds)+'.pkl'))
             # 保存图片
-            fig.savefig(os.path.join(working_dir, 'reinforce-' + str(i_episode) + '.jpg'))
+            fig.savefig(os.path.join(working_dir,
+                                     'ckp-' + str(i_episode) + 'finePS_' + str(params_fine_pre_seconds)+'.jpg'))
             ax1.cla()
             ax2.cla()
             ax3.cla()

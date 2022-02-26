@@ -16,6 +16,7 @@ class GymEnvDaily(GymEnvBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.mode = 'Daily'
         self.current_day_index = None
 
     def current_day(self):
