@@ -99,8 +99,8 @@ def backtest(model_file):
 
             # 下一个
             state = torch.Tensor(np.array([next_state]))
-        print("The final gain is %.2f. The final total account balance is %.2f RMB, Date: %s\n %s"
-              % (episode_return, info['amount'], env.current_day(), str(info)))
+        print("The final total account balance is %.2f RMB, Date: %s\n %s"
+              % (info['amount'], env.current_day(), str(info)))
         # 设置金额
         env.set_capital(info['amount'])
 
