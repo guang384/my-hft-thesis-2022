@@ -28,7 +28,7 @@ params_checkpoint_frequency = 500
 params_gamma = 0.99
 random.seed(timeit.default_timer())
 params_seed = random.randint(0, 2 ** 32 - 1)
-params_fine_pre_seconds = 0.5
+params_fine_pre_seconds = 0.3
 
 ''' 定义环境类 '''
 
@@ -86,20 +86,23 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
 
     # 为训练做准备
     log_reward = []
+    log_pnl=[]
     log_smooth = []
     log_step_count = []
     log_loss = []
 
     # 双Y轴展示
     fig = plt.figure(figsize=(8, 6))
-    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
+    gs = gridspec.GridSpec(3, 1, height_ratios=[2, 1,1])
     plt.subplots_adjust(left=0.13, right=0.87, top=0.9, bottom=0.1)
     ax1 = plt.subplot(gs[0])
     ax2 = ax1.twinx()
     ax3 = plt.subplot(gs[1])
+    ax4 = plt.subplot(gs[2])
     ax1.set_ylabel(r"Ticks")
-    ax2.set_ylabel(r"The profit and loss")
-    ax3.set_ylabel(r"Model loss")
+    ax2.set_ylabel(r"The profit and loss (PnL)")
+    ax3.set_ylabel(r"Reward")
+    ax4.set_ylabel(r"Loss")
     plt.grid(ls='--')
 
     best_loss = -100000
@@ -149,7 +152,7 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
             best_loss = new_loss
             torch.save(agent.model.state_dict(),
                        os.path.join(working_dir,
-                                    'finePS_' + str(params_fine_pre_seconds)
+                                    'fine_' + str(params_fine_pre_seconds)
                                     + '_episode_' + str(i_episode)
                                     + '_best_loss_' + str(best_loss) + '.pkl'))
 
@@ -158,17 +161,20 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
             # 保存模型
             torch.save(agent.model.state_dict(),
                        os.path.join(working_dir,
-                                    'ckp-' + str(i_episode) + 'finePS_' + str(params_fine_pre_seconds)+'.pkl'))
+                                    'ckp-' + str(i_episode) + 'fine_' + str(params_fine_pre_seconds)+'.pkl'))
             # 保存图片
             fig.savefig(os.path.join(working_dir,
-                                     'ckp-' + str(i_episode) + 'finePS_' + str(params_fine_pre_seconds)+'.jpg'))
+                                     'ckp-' + str(i_episode) + 'fine_' + str(params_fine_pre_seconds)+'.jpg'))
             ax1.cla()
             ax2.cla()
             ax3.cla()
+            ax4.cla()
             ax1.set_ylabel(r"Ticks")
-            ax2.set_ylabel(r"The profit and loss")
-            ax3.set_ylabel(r"Model loss")
+            ax2.set_ylabel(r"The profit and loss (PnL)")
+            ax3.set_ylabel(r"Reward")
+            ax3.set_ylabel(r"Loss")
             # 重置参数
+            log_pnl = []
             log_reward = []
             log_smooth = []
             log_step_count = []
@@ -177,8 +183,8 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
         print("Episode: {:<5.0f}, reward: {:<10.1f}, use {:5.0f} ticks, amount {:<10.1f} , actions {}".format(
             i_episode, np.sum(rewards), t + 1, info['amount'] - 20000, str(action_count)))
 
-        # log_reward.append(np.sum(rewards))
-        log_reward.append(info['amount'] - 20000)
+        log_reward.append(np.sum(rewards))
+        log_pnl.append(info['amount'] - 20000)
 
         log_step_count.append(t)
 
@@ -193,9 +199,10 @@ def train(env_name=ENV_NAME, seed=params_seed, dir_suffix=None):
         if if_plot_ion:
             # 交互绘图
             ax1.plot(log_step_count, '--', color='aquamarine', label='steps')
-            ax2.plot(log_reward, ':b', label='Reward')
+            ax2.plot(log_pnl, ':b', label='PnL')
             ax2.plot(log_smooth, '-y')
-            ax3.plot(log_loss, '-r')
+            ax3.plot(log_reward, '-r')
+            ax4.plot(log_loss, '-g')
             plt.pause(1e-5)
 
     env.close()

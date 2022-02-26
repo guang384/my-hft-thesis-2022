@@ -64,11 +64,6 @@ def backtest(model_file):
     else:
         raise RuntimeError(model_file, ' not found!')
 
-    """ 准备画板 """
-    plt.figure()
-    ax1 = plt.subplot(311)
-    ax2 = plt.subplot(312)
-    ax3 = plt.subplot(313)
     """ 开始测试 """
     log_price = []
     log_position = []
@@ -109,6 +104,11 @@ def backtest(model_file):
         # 设置金额
         env.set_capital(info['amount'])
 
+    """ 准备画板 """
+    plt.figure()
+    ax1 = plt.subplot(311)
+    ax2 = plt.subplot(312)
+    ax3 = plt.subplot(313)
     plt.suptitle("The final balance is " + str(info['amount']))
     ax1.plot(log_price, '-b', label='Price')
     ax2.plot(log_position, '-y', label='Position')
@@ -122,5 +122,5 @@ if __name__ == '__main__':
         backtest(argv_model_file)
     else:
         backtest('checkpoint_TinyMarketGymEnvRandomWithSharpeReward-v0/'
-                 'finePS_0.5_episode_140_best_loss_213.08543395996094.pkl')
+                 'finePS_0.3_episode_322_best_loss_31.630949020385742.pkl')
     print('Done.')

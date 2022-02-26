@@ -242,8 +242,8 @@ class GymEnvBase(gym.Env):
         # done (bool): whether the episode has ended, in which case further step() calls will return undefined results
         done = self._if_done_when_step() or self.done
         self.done = done
-        if self.huge_blow:
-            reward = -100000
+        if self.huge_blow and done:
+            reward = -5000
         # 附加信息
         # info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         info = self.current_position_info.copy()
