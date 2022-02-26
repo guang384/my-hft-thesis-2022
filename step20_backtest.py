@@ -8,7 +8,7 @@ import torch
 import matplotlib.pyplot as plt
 from gym import envs, register
 
-from step19_tran_with_sharpe_ratio import REINFORCE, params_hidden_size, if_gpu, params_fine_pre_seconds
+from step19_tran import REINFORCE, params_hidden_size, if_gpu, params_fine_pre_seconds
 from tiny_market import GymEnvLongAndShortImbalanceWillResultInFines, \
     GymEnvUseSharpRatioAsReward, GymEnvDaily, GymEnvWaitAndSeeWillResultInFines, \
     GymEnvDoneIfUndermargined, GymEnvDoneIfOrderTimeout, GymEnvFeatureScaling
