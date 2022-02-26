@@ -9,7 +9,7 @@ from step08_train_model import try_train
 from step10_statistics_execution_time import train_and_evaluate_mp_async_timed
 from gym import envs
 
-from tiny_market import GymEnvFeatureScaling, GymEnvRandom, GymEnvLongAndShortImbalanceWillResult, \
+from tiny_market import GymEnvFeatureScaling, GymEnvRandom, GymEnvLongAndShortImbalanceWillResultInFines, \
     GymEnvWaitAndSeeWillResultInFines
 
 ENV_NAME = 'TinyMarketGymEnvRandomInd-v0'
@@ -27,7 +27,7 @@ if ENV_NAME not in env_ids:
 
 
 # 依赖关系是从左往右（先调用自己内部的然后遇到super从左往右，直到没有super为止
-class GymEnvRandomIndData(GymEnvLongAndShortImbalanceWillResult,
+class GymEnvRandomIndData(GymEnvLongAndShortImbalanceWillResultInFines,
                           GymEnvWaitAndSeeWillResultInFines,
                           GymEnvFeatureScaling, GymEnvRandom):
     pass

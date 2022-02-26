@@ -12,16 +12,16 @@ from .gym_env_base import GymEnvBase
 """
 
 
-class GymEnvLongAndShortImbalanceWillResult(GymEnvBase):
+class GymEnvLongAndShortImbalanceWillResultInFines(GymEnvBase):
 
     def _pick_day_when_reset(self):
-        return super(GymEnvLongAndShortImbalanceWillResult, self)._pick_day_when_reset()
+        return super(GymEnvLongAndShortImbalanceWillResultInFines, self)._pick_day_when_reset()
 
     def _pick_start_index_and_time_when_reset(self):
-        return super(GymEnvLongAndShortImbalanceWillResult, self)._pick_start_index_and_time_when_reset()
+        return super(GymEnvLongAndShortImbalanceWillResultInFines, self)._pick_start_index_and_time_when_reset()
 
     def _if_done_when_step(self):
-        return super(GymEnvLongAndShortImbalanceWillResult, self)._if_done_when_step()
+        return super(GymEnvLongAndShortImbalanceWillResultInFines, self)._if_done_when_step()
 
     def __init__(self, **kwargs):
         assert 'fine_pre_seconds' in kwargs.keys(), 'Parameter [fine_pre_seconds] must be specified.'
