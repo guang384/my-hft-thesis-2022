@@ -324,6 +324,8 @@ class GymEnvBase(gym.Env):
         position_info = self._position_info()
         while position_info['risk'] > 0.95:  # 爆仓了 强平到不爆
             self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
+            logger.info("Margin closeout ...")
+            self.undermargined_count += 1
             position_info = self._position_info()
         # 更新当前头寸
         self.current_position_info = position_info
@@ -363,6 +365,7 @@ class GymEnvBase(gym.Env):
             return
         if not self._can_open_new_position():  # 检查可用资金是否允许开仓
             logger.info("Undermargined ...")
+            self.undermargined_count += 1
             return
 
         direction = -1
