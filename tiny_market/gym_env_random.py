@@ -29,5 +29,5 @@ class GymEnvRandom(GymEnvBase):
 
     # 开过仓(有交易记录），但是当前头寸为0 或者 收盘了
     def _if_done_when_step(self):
-        if_return_to_zero_position = len(self.order_list) > 0 and self.current_position == 0
+        if_return_to_zero_position = len(self.order_list) > 0 and self.current_position_info['position'] == 0
         return if_return_to_zero_position or self.current_observation_index >= self.max_observation_index

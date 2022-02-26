@@ -49,7 +49,7 @@ class GymEnvDaily(GymEnvBase):
 
     # 直到收盘才结束 (不能开仓了且已经清仓
     def _if_done_when_step(self):
-        if_no_money = self.current_position == 0 and not self._can_open_new_position()
-        if_no_time = self.current_position == 0 and self.time > self.TIME_ONLY_CLOSE
+        if_no_money = self.current_position_info['position'] == 0 and not self._can_open_new_position()
+        if_no_time = self.current_position_info['position'] == 0 and self.time > self.TIME_ONLY_CLOSE
         if_current_day_end = self.current_observation_index >= self.max_observation_index
         return if_no_money or if_no_time or if_current_day_end

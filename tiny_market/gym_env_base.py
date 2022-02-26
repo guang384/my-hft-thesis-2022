@@ -81,7 +81,7 @@ class GymEnvBase(gym.Env):
         self.order_list = []
         self.unclosed_order_index = 0
 
-        self.current_position = 0  # 当前头寸 多头>0 空头<0 空仓=0
+        self.current_position_info = None  # 当前持仓情况
         self.margin_pre_lot = Decimal('0')  # 当前每手保证金
         self.last_price = Decimal('0')  # 当前最新价
         self.transaction_data = None  # 交易数据
@@ -133,8 +133,8 @@ class GymEnvBase(gym.Env):
         del self.order_list
         self.order_list = []
 
-        self.current_position = 0
         self.unclosed_order_index = 0
+        self.current_position_info = None
 
         del self.records
         self.records = {
@@ -211,65 +211,18 @@ class GymEnvBase(gym.Env):
         market_bid_price = Decimal(str(min(last_transaction_data['bid'], current_transaction_data['bid'])))
 
         '''
-        调仓
-        ---
-        先检验是否到临近尾盘需要清仓
-        然后如果有持仓根据action加减仓位
-        没有持仓根据action开新仓
-        最后查看是否有需要超时平仓的订单
+        仓位维护
         '''
-
-        if self.time > self.TIME_CLOSE_ALL \
-                or self.max_observation_index - self.current_observation_index < 100:  # 距离收盘一分钟 平所有
-            for i in range(self.unclosed_order_index, len(self.order_list)):
-                self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
-            self.done = True  # 收盘了
-        else:
-            if self.unclosed_order_index < len(self.order_list):
-                # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
-                _, _, direction, _, _, _ = self.order_list[self.unclosed_order_index]  # 持仓方向
-                if action == 1:  # 看多
-                    if direction < 0:  # 持仓为空头
-                        self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
-                    else:
-                        self._open_long(market_ask_price, ask_volume)  # 加多
-                elif action == 2:  # 看空
-                    if direction > 0:  # 持仓为多头
-                        self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
-                    else:
-                        self._open_short(market_bid_price, bid_volume)  # 加空
-            else:  # 无持仓
-                if action == 1:  # 看多
-                    self._open_long(market_ask_price, ask_volume)  # 加多
-                elif action == 2:  # 看空
-                    self._open_short(market_bid_price, bid_volume)  # 加空
-
-            # 查看是否有需要超时平仓的订单
-            for i in range(self.unclosed_order_index, len(self.order_list)):
-                open_time, open_index, direction, open_price, close_price, close_time = self.order_list[i]
-                if (self.time - open_time).total_seconds() > self.MAX_HOLD_SECONDS:  # 持仓超过最大持仓时间
-                    self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
-                    self.timeout_close_count += 1
-                else:
-                    break
-        '''
-        仓位调整完成，检查持仓情况
-        '''
-        position_info = self._position_info()
-        while position_info['risk'] > 0.95:  # 爆仓了 强平到不爆
-            self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
-            position_info = self._position_info()
+        self._update_position(action, market_ask_price, market_bid_price, ask_volume, bid_volume)
+        self._check_order_list(market_ask_price, market_bid_price, ask_volume, bid_volume)
+        self._check_position_info(market_ask_price, market_bid_price, ask_volume, bid_volume)
 
         '''
-        更新指标参数
+        记录指标变化
         '''
-        # 更新当前头寸
-        self.current_position = position_info['position']
-
-        # 记录指标变化
-        self.records['amount'].append(position_info['amount'])
-        self.records['position'].append(position_info['position'])
-        self.records['risk'].append(position_info['risk'])
+        self.records['amount'].append(self.current_position_info['amount'])
+        self.records['position'].append(self.current_position_info['position'])
+        self.records['risk'].append(self.current_position_info['risk'])
         self.records['action'].append(action)
 
         '''
@@ -287,7 +240,7 @@ class GymEnvBase(gym.Env):
         self.done = done
         # 附加信息
         # info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
-        info = position_info.copy()
+        info = self.current_position_info.copy()
         info['commission'] = self.commission
         info['order_count'] = len(self.order_list)
         info['unclosed_index'] = self.unclosed_order_index
@@ -314,6 +267,66 @@ class GymEnvBase(gym.Env):
     def close(self):
         self.file.close()
         del self.file
+
+    def _update_position(self, action, market_ask_price, market_bid_price, ask_volume, bid_volume):
+        """
+        调仓
+        ---
+        先检验是否到临近尾盘需要清仓
+        然后如果有持仓根据action加减仓位
+        没有持仓根据action开新仓
+        最后查看是否有需要超时平仓的订单
+        """
+
+        if self.time > self.TIME_CLOSE_ALL \
+                or self.max_observation_index - self.current_observation_index < 100:  # 距离收盘一分钟 平所有
+            for i in range(self.unclosed_order_index, len(self.order_list)):
+                self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
+            self.done = True  # 收盘了
+        else:
+            if self.unclosed_order_index < len(self.order_list):
+                # Position info -> Tuple(open_time, open_index, direction, open_price, close_price, close_time)
+                _, _, direction, _, _, _ = self.order_list[self.unclosed_order_index]  # 持仓方向
+                if action == 1:  # 看多
+                    if direction < 0:  # 持仓为空头
+                        self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
+                    else:
+                        self._open_long(market_ask_price, ask_volume)  # 加多
+                elif action == 2:  # 看空
+                    if direction > 0:  # 持仓为多头
+                        self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)  # 减仓
+                    else:
+                        self._open_short(market_bid_price, bid_volume)  # 加空
+            else:  # 无持仓
+                if action == 1:  # 看多
+                    self._open_long(market_ask_price, ask_volume)  # 加多
+                elif action == 2:  # 看空
+                    self._open_short(market_bid_price, bid_volume)  # 加空
+
+    def _check_order_list(self, market_ask_price, market_bid_price, ask_volume, bid_volume):
+        """
+        检查订单健康状况
+        """
+        # 查看是否有需要超时平仓的订单
+        for i in range(self.unclosed_order_index, len(self.order_list)):
+            open_time, open_index, direction, open_price, close_price, close_time = self.order_list[i]
+            if (self.time - open_time).total_seconds() > self.MAX_HOLD_SECONDS:  # 持仓超过最大持仓时间
+                self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
+                self.timeout_close_count += 1
+            else:
+                break
+
+    def _check_position_info(self, market_ask_price, market_bid_price, ask_volume, bid_volume):
+        """
+        检查持仓情况
+        """
+        # 检查仓位是否健康
+        position_info = self._position_info()
+        while position_info['risk'] > 0.95:  # 爆仓了 强平到不爆
+            self._close_earliest(market_ask_price, market_bid_price, ask_volume, bid_volume)
+            position_info = self._position_info()
+        # 更新当前头寸
+        self.current_position_info = position_info
 
     def _open_long(self, ask_price, ask_volume):
         if ask_volume < self.MIN_ORDER_VOLUME:  # 订单量不足
