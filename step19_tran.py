@@ -53,7 +53,7 @@ env_ids = [env_spec.id for env_spec in all_envs]
 if ENV_NAME not in env_ids:
     register(
         id=ENV_NAME,
-        entry_point='step19_tran_with_sharpe_ratio:GymEnvRandomWithSharpeReward',
+        entry_point='step19_tran:GymEnvRandomWithSharpeReward',
         max_episode_steps=1800,  # 一个episode最大步数
         reward_threshold=10000.0,
     )
