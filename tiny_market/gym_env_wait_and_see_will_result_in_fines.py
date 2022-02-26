@@ -42,7 +42,7 @@ class GymEnvWaitAndSeeWillResultInFines(GymEnvBase):
 
     def _observation(self):
         ob = super()._observation()
-        return np.array(ob + float(self.total_fine/10))
+        return np.append(ob, float(self.total_fine/10))
 
     def _calculate_reward(self):
         reward = super()._calculate_reward()

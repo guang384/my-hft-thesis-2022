@@ -48,7 +48,7 @@ class GymEnvLongAndShortImbalanceWillResultInFines(GymEnvBase):
 
     def _observation(self):
         ob = super()._observation()
-        return np.array(ob + float(self.current_imbalance))
+        return np.append(ob, float(self.current_imbalance))
 
     def _calculate_reward(self):
         reward = super()._calculate_reward()
