@@ -49,7 +49,7 @@ class GymEnvWaitAndSeeWillResultInFines(GymEnvBase):
         current_fine = 0
         if len(self.order_list) == 0:
             seconds_of_watching = int(self.seconds_from_start)
-            total_watching_fine = round(self.fine_pre_seconds * seconds_of_watching, 2)
+            total_watching_fine = round((self.fine_pre_seconds * seconds_of_watching) ** 1.5, 2)  # 1.5次幂，等的越久扣的越多
             current_fine = total_watching_fine - self.total_fine
             self.total_fine = total_watching_fine
         return reward - Decimal(str(current_fine))

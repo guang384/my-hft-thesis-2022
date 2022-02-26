@@ -102,6 +102,8 @@ class GymEnvBase(gym.Env):
             'action': []
         }
 
+        self.huge_blow = False  # 突发情况，会严重影响reward
+
         """ 状态空间和动作空间 """
         first_day = self.possible_days[0]  # 随便取一天
         # 获取一个状态数据以便设置状态空间
@@ -129,6 +131,8 @@ class GymEnvBase(gym.Env):
         self.done = False
         self.closed_pl = Decimal('0')
         self.commission = Decimal('0')
+
+        self.huge_blow = False
 
         del self.order_list
         self.order_list = []
@@ -238,6 +242,8 @@ class GymEnvBase(gym.Env):
         # done (bool): whether the episode has ended, in which case further step() calls will return undefined results
         done = self._if_done_when_step() or self.done
         self.done = done
+        if self.huge_blow:
+            reward = -100000
         # 附加信息
         # info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         info = self.current_position_info.copy()
