@@ -3,7 +3,7 @@
 """
 import numpy as np
 import pandas as pd
-from gym import spaces, register
+from gym import register
 
 from tiny_market import GymEnvRandom
 from step08_train_model import try_train
