@@ -18,7 +18,7 @@ EPOCHS = 1
 MAX_VOCAB_SIZE = 10000
 EMBEDDING_SIZE = 100
 BATCH_SIZE = 32
-DATALADER_WORKER_NUMS = 3  # 数据集采样程序GPU加成不足，不如增多CPU进程数效率高
+DATALOADER_WORKER_NUMS = 3  # 数据集采样程序GPU加成不足，不如增多CPU进程数效率高
 LR = 1e-3
 SEED = 10086
 
@@ -150,7 +150,7 @@ class EmbeddingModel(nn.Module):
 # 训练
 def train():
     dataset = WordEmbeddingDataset(text, word2idx, word_freqs)
-    dataloader = tud.DataLoader(dataset, BATCH_SIZE, shuffle=True, num_workers=DATALADER_WORKER_NUMS)
+    dataloader = tud.DataLoader(dataset, BATCH_SIZE, shuffle=True, num_workers=DATALOADER_WORKER_NUMS)
     print('dataset word size: ', len(dataset))
 
     model = EmbeddingModel(MAX_VOCAB_SIZE, EMBEDDING_SIZE)
