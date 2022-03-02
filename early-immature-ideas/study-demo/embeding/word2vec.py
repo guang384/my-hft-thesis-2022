@@ -144,7 +144,7 @@ class EmbeddingModel(nn.Module):
         return -loss
 
     def input_embedding(self):
-        return self.input_embed.weight.detach().numpy()
+        return self.input_embed.weight.detach().cpu().numpy()
 
 
 # 训练
