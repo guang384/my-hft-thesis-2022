@@ -17,8 +17,11 @@ K = 15  # number of negative samples pre positive
 EPOCHS = 1
 MAX_VOCAB_SIZE = 10000
 EMBEDDING_SIZE = 100
-BATCH_SIZE = 1 # 数据更新方式是逐个更新，所以这里一个一个一个取，然后dataloader用多个线程，这样可以防止等到一批凑满以后再返回
-DATALOADER_WORKER_NUMS = 3  # 数据集采样程序GPU加成不足，不如增多CPU进程数效率高
+
+# 调整BATCH_SIZE和DATALOADER_WORKER_NUMS让数据集产生和消费达到一个平衡 效果最佳
+BATCH_SIZE = 3  # 每个次迭代从数据集中取出的数据多少，决定迭代轮次，另外考虑dataloader加载效率
+DATALOADER_WORKER_NUMS = 3  # 本方案数据集采样CPU密集型，GPU加成不足，采用多个worker提高效率。dataloader的并行机制是生产者消费者模式？
+
 LR = 1e-3
 SEED = 10086
 
@@ -159,7 +162,6 @@ def train():
     for e in range(EPOCHS):
         last_time = timeit.default_timer()
         calc_time = 0
-        step = 0
         for i, (input_labels, positive_labels, negative_labels) in enumerate(dataloader):
             start = timeit.default_timer()
             input_labels = input_labels.long().to(device)
@@ -174,14 +176,15 @@ def train():
             calc_time += use
             if i % 100 == 0:
                 time = timeit.default_timer() - last_time
-                print('EPOCH: ', e, '| ITERATION: ', i, '| LOSS: ', loss.item(), '| DELTA TIME: ', time,
-                      '| CALC Time: ',
-                      calc_time)
+                print('EPOCH: ', e,  # 轮次
+                      '| ITER: ', i, '/', len(dataloader),  # 迭代进度
+                      '| LOSS: ', loss.item(),  # 损失
+                      '|  TIME: ', time,  # 迭代一次用时
+                      '( CALC : ', calc_time, ')')  # 迭代一次用于训练计算的时间（其他时间因为数据集采样消耗
                 calc_time = 0
                 last_time = timeit.default_timer()
 
     embedding_weights = model.input_embedding()
-    torch.save(model.state_dict(), "")
     torch.save(model.state_dict(), "embedding-{}.th".format(EMBEDDING_SIZE))
     return embedding_weights
 
