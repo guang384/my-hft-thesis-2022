@@ -178,8 +178,8 @@ def train():
                 time = timeit.default_timer() - last_time
                 print('EPOCH: ', e,  # 轮次
                       '| ITER: ', i, '/', len(dataloader),  # 迭代进度
-                      '| LOSS: ', loss.item(),  # 损失
-                      '|  TIME: ', time,  # 迭代一次用时
+                      '| LOSS: ', loss.item(),  # 误差
+                      '| TIME: ', time,  # 迭代一次用时
                       '( CALC : ', calc_time, ')')  # 迭代一次用于训练计算的时间（其他时间因为数据集采样消耗
                 calc_time = 0
                 last_time = timeit.default_timer()
@@ -199,6 +199,14 @@ def test(embedding_weights):
 
     for word in ["two", "america", "computer"]:
         print(word, find_nearest(word))
+    """
+    OUTPUT >>
+    
+    two ['two', 'three', 'four', 'five', 'zero', 'six', 'seven', 'one', 'eight', 'nine']
+    america ['america', 'europe', 'africa', 'asia', 'australia', 'north', 'south', 'canada', 'korea', 'india']
+    computer ['computer', 'computers', 'video', 'hardware', 'software', 'digital', 'computing', 'graphics', 'engineering', 'technology']
+    
+    """
 
 
 if __name__ == '__main__':
