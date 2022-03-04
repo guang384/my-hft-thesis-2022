@@ -178,7 +178,7 @@ def train(text, word2idx, word_freqs):
                 used_time = timeit.default_timer() - epoch_start
                 print(
                     # 轮次
-                    'EPOCH: ', e + 1, '/', EPOCHS + 1,
+                    'EPOCH: ', e + 1, '/', EPOCHS,
                     # 迭代进度
                     '| ITER: ', i, '/', len(dataloader),
                     # 迭代一次用于训练计算的时间和迭代一次用时（其他时间因为数据集采样消耗
