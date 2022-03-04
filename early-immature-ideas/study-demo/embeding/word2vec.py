@@ -19,8 +19,8 @@ MAX_VOCAB_SIZE = 10000
 EMBEDDING_SIZE = 100
 
 # 调整BATCH_SIZE和DATALOADER_WORKER_NUMS让数据集产生和消费达到一个平衡 效果最佳
-BATCH_SIZE = 3  # 每个次迭代从数据集中取出的数据多少，决定迭代轮次，另外考虑dataloader加载效率
-DATALOADER_WORKER_NUMS = 3  # 本方案数据集采样CPU密集型，GPU加成不足，采用多个worker提高效率。dataloader的并行机制是生产者消费者模式？
+BATCH_SIZE = 16  # 每个次迭代从数据集中取出的数据多少，决定迭代轮次，另外考虑dataloader加载效率
+DATALOADER_WORKER_NUMS = 4  # 本方案数据集采样CPU密集型，GPU加成不足，采用多个worker提高效率。dataloader的并行机制是生产者消费者模式？
 
 LR = 1e-3
 SEED = 10086
@@ -31,27 +31,24 @@ torch.manual_seed(SEED)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 读取文本
-with open('data/text8.train.txt') as f:
-    text = f.read()
 
-text = text.lower().split()  # 分割
+# 读取文本 拆分并按照单词索引
+def encoder_word(text):
+    # 构造 单词到单词出现次数的dict
+    vocab_dict = dict(
+        Counter(text).most_common(MAX_VOCAB_SIZE - 1)
+    )
+    vocab_dict['<UNK>'] = len(text) - np.sum(list(vocab_dict.values()))  # 没有编号的词全部统计到UNK上
 
-# 构造 单词到单词出现次数的dict
-vocab_dict = dict(
-    Counter(text).most_common(MAX_VOCAB_SIZE - 1)
-)
-vocab_dict['<UNK>'] = len(text) - np.sum(list(vocab_dict.values()))  # 没有编号的词全部统计到UNK上
+    # 映射关系
 
-# 映射关系
+    word2idx = {word: i for i, word in enumerate(vocab_dict.keys())}
+    idx2word = {i: word for i, word in enumerate(vocab_dict.keys())}
 
-word2idx = {word: i for i, word in enumerate(vocab_dict.keys())}
-idx2word = {i: word for i, word in enumerate(vocab_dict.keys())}
+    word_counts = np.array([count for count in vocab_dict.values()], dtype=float)
+    word_freqs = word_counts / np.sum(word_counts)  # 词频
 
-word_counts = np.array([count for count in vocab_dict.values()], dtype=float)
-word_freqs = word_counts / np.sum(word_counts)  # 词频
-
-word_freqs = word_freqs ** (3. / 4)  # 论文里要求频率变为原来的0.75次方
+    return word2idx, idx2word, word_freqs
 
 
 # DataLoader
@@ -74,7 +71,8 @@ class WordEmbeddingDataset(tud.Dataset):
         # 单词索引
         self.word2idx = word2idx
         # 词频
-        self.word_freqs = torch.Tensor(word_freqs)
+        scaled_word_freqs = word_freqs ** (3. / 4)  # 论文里要求频率变为原来的0.75次方 , 猜测是非均衡缩放下频率这样抽样会稍微平均一点
+        self.word_freqs = torch.Tensor(scaled_word_freqs)
 
     def __len__(self):
         return len(self.text_encoded)
@@ -151,7 +149,7 @@ class EmbeddingModel(nn.Module):
 
 
 # 训练
-def train():
+def train(text, word2idx, word_freqs):
     dataset = WordEmbeddingDataset(text, word2idx, word_freqs)
     dataloader = tud.DataLoader(dataset, BATCH_SIZE, shuffle=True, num_workers=DATALOADER_WORKER_NUMS)
     print('dataset word size: ', len(dataset))
@@ -159,9 +157,11 @@ def train():
     model = EmbeddingModel(MAX_VOCAB_SIZE, EMBEDDING_SIZE)
     print('model on cuda : ', next(model.parameters()).is_cuda)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+
     for e in range(EPOCHS):
-        last_time = timeit.default_timer()
-        calc_time = 0
+        print('EPOCH', EPOCHS, 'STARTED !')
+        epoch_start = timeit.default_timer()
+        calc_total_time = 0
         for i, (input_labels, positive_labels, negative_labels) in enumerate(dataloader):
             start = timeit.default_timer()
             input_labels = input_labels.long().to(device)
@@ -172,33 +172,35 @@ def train():
             loss = model(input_labels, positive_labels, negative_labels).mean()
             loss.backward()
             optimizer.step()
-            use = timeit.default_timer() - start
-            calc_time += use
-            if i % 100 == 0:
-                time = timeit.default_timer() - last_time
-                print('EPOCH: ', e,  # 轮次
-                      '| ITER: ', i, '/', len(dataloader),  # 迭代进度
-                      '| LOSS: ', loss.item(),  # 误差
-                      '| TIME: ', time,  # 迭代一次用时
-                      '( CALC : ', calc_time, ')')  # 迭代一次用于训练计算的时间（其他时间因为数据集采样消耗
-                calc_time = 0
-                last_time = timeit.default_timer()
-
-    embedding_weights = model.input_embedding()
-    torch.save(model.state_dict(), "embedding-{}.th".format(EMBEDDING_SIZE))
-    return embedding_weights
+            calc_use = timeit.default_timer() - start
+            calc_total_time += calc_use
+            if i % 100 == 0 and i > 0:
+                used_time = timeit.default_timer() - epoch_start
+                print(
+                    # 轮次
+                    'EPOCH: ', e + 1, '/', EPOCHS + 1,
+                    # 迭代进度
+                    '| ITER: ', i, '/', len(dataloader),
+                    # 迭代一次用于训练计算的时间和迭代一次用时（其他时间因为数据集采样消耗
+                    '| TRAINING TIME PER ITER:', round(calc_total_time / i, 4), '/', round(used_time / i, 4),
+                    # 估计剩余时间
+                    ' , ETA :', round((used_time / i) * (len(dataloader) - i), 2),
+                    # 误差
+                    '| LOSS: ', loss.item(), )
+    print('Training done.')
+    return model
 
 
 # 验证
-def test(embedding_weights):
+def test(word2idx, idx2word, embedding_weights):
     def find_nearest(word):
         index = word2idx[word]
         embedding = embedding_weights[index]
         cos_dis = np.array([scipy.spatial.distance.cosine(e, embedding) for e in embedding_weights])
         return [idx2word[i] for i in cos_dis.argsort()[:10]]
 
-    for word in ["two", "america", "computer"]:
-        print(word, find_nearest(word))
+    for w in ["two", "america", "computer"]:
+        print(w, find_nearest(w))
     """
     OUTPUT >>
     
@@ -212,5 +214,44 @@ def test(embedding_weights):
 if __name__ == '__main__':
     print('run on device : ', device)
 
-    embedding_weights = train()
-    test(embedding_weights)
+    DATA_SET = 'dev'
+
+    # 读取文本
+    with open('data/text8.dev.txt') as f:
+        the_text = f.read()
+
+    # 分词
+    the_text = the_text.lower().split()
+    print('Got', len(the_text), 'words of text.')
+
+    # 编码单词
+    the_word2idx, the_idx2word, the_word_freqs = encoder_word(the_text)
+
+    # save word encoded
+    torch.save((the_word2idx, the_idx2word, the_word_freqs),
+               "mapping_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    print('encoded word saved!')
+
+    # 加载 编码好的单词
+    (the_word2idx, the_idx2word, the_word_freqs) = torch.load(
+        "mapping_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    print('encoded word loaded!')
+
+    '''
+    训练
+    '''
+    trained_model = train(text=the_text, word2idx=the_word2idx, word_freqs=the_word_freqs)
+
+    # 保存训练好的 embedding
+    embedding_weights = trained_model.input_embedding()
+    torch.save(trained_model.state_dict(), "embedding_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    print('model saved!')
+
+    # 加载训练好的 embedding
+    embedding_weights = torch.load("embedding_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    print('model loaded!')
+
+    '''
+    测试
+    '''
+    test(the_word2idx, the_idx2word, embedding_weights)
