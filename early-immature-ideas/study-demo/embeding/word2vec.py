@@ -200,7 +200,9 @@ def test(word2idx, idx2word, embedding_weights):
         return [idx2word[i] for i in cos_dis.argsort()[:10]]
 
     for w in ["two", "america", "computer"]:
+        print(w, word2idx[w])
         print(w, find_nearest(w))
+
     """
     OUTPUT >>
     
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     DATA_SET = 'dev'
 
     # 读取文本
-    with open('data/text8.dev.txt') as f:
+    with open('data/text8.{}.txt'.format(DATA_SET)) as f:
         the_text = f.read()
 
     # 分词
@@ -229,12 +231,12 @@ if __name__ == '__main__':
 
     # save word encoded
     torch.save((the_word2idx, the_idx2word, the_word_freqs),
-               "mapping_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+               "word_mapping-dataset_{}-embedding_size_{}.th".format(DATA_SET, EMBEDDING_SIZE))
     print('encoded word saved!')
 
     # 加载 编码好的单词
     (the_word2idx, the_idx2word, the_word_freqs) = torch.load(
-        "mapping_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+        "word_mapping-dataset_{}-embedding_size_{}.th".format(DATA_SET, EMBEDDING_SIZE))
     print('encoded word loaded!')
 
     '''
@@ -244,14 +246,20 @@ if __name__ == '__main__':
 
     # 保存训练好的 embedding
     embedding_weights = trained_model.input_embedding()
-    torch.save(trained_model.state_dict(), "embedding_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    torch.save(trained_model.state_dict(),
+               "trained_model-dataset_{}-embedding_size_{}.th".format(DATA_SET, EMBEDDING_SIZE))
     print('model saved!')
 
     # 加载训练好的 embedding
-    embedding_weights = torch.load("embedding_dataset-{}_embedding-size-{}.th".format(DATA_SET, EMBEDDING_SIZE))
-    print('model loaded!')
+    model_dict = torch.load(
+        "trained_model-dataset_{}-embedding_size_{}.th".format(DATA_SET, EMBEDDING_SIZE))
+    model_to_load = EmbeddingModel(MAX_VOCAB_SIZE, EMBEDDING_SIZE)
+    model_to_load.load_state_dict(model_dict)
+    print('trained_model loaded!')
 
     '''
     测试
     '''
-    test(the_word2idx, the_idx2word, embedding_weights)
+    test(the_word2idx, the_idx2word, model_to_load.input_embedding())
+
+    print('Done.')
