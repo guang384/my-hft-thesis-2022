@@ -112,6 +112,9 @@ class Pt2enCorpusDataset(tud.Dataset):
     def __len__(self):
         return len(self.pt_tensor)
 
+    def get_vocab_size(self):  # 词库词汇量
+        return self.tokenizer.get_vocab_size(with_added_tokens=True)
+
     def __getitem__(self, idx):
         """
         返回：
@@ -164,3 +167,4 @@ if __name__ == '__main__':
 
     print('pt-> ', dataset.decode(one_pt))
     print('en-> ', dataset.decode(one_en))
+    print('vocab_size-> ', dataset.get_vocab_size())
