@@ -89,7 +89,7 @@ class Pt2enCorpusDataset(tud.Dataset):
                  pt_corpus_file_path,
                  en_corpus_file_path,
                  tokenizer_model_file_path,
-                 embedding_width=40):
+                 max_length=40):
         """
         pt_corpus_file_path: 葡萄牙语料库
         en_corpus_file_path: 对应的英文语料库
@@ -104,10 +104,10 @@ class Pt2enCorpusDataset(tud.Dataset):
         # 编码数据
         encoded_df = data_encode(self.tokenizer, corpus_df, if_plot=False)
         # 过滤数据（保留长度在指定编码长度以内的）
-        encoded_df = data_filter(encoded_df, length=embedding_width)
+        encoded_df = data_filter(encoded_df, length=max_length)
         # 补0 , 即用[PAD]补齐拆开的句子
-        self.pt_tensor = padding_and_to_tensor(encoded_df['pt_ids'], width=embedding_width)
-        self.en_tensor = padding_and_to_tensor(encoded_df['en_ids'], width=embedding_width)
+        self.pt_tensor = padding_and_to_tensor(encoded_df['pt_ids'], width=max_length)
+        self.en_tensor = padding_and_to_tensor(encoded_df['en_ids'], width=max_length)
 
     def __len__(self):
         return len(self.pt_tensor)
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     dataset = Pt2enCorpusDataset(pt_corpus_file_path='data/corpus_pt_en/train.pt',
                                  en_corpus_file_path='data/corpus_pt_en/train.en',
                                  tokenizer_model_file_path='data/tokenizer_model/bert-wordpiece-train-25000-vocab.txt',
-                                 embedding_width=64)
+                                 max_length=64)
     dataloader = tud.DataLoader(dataset, 12, shuffle=True, num_workers=1)
 
     print('dataset size', len(dataset))
