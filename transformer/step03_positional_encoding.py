@@ -28,3 +28,10 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
+
+
+if __name__ == '__main__':
+    pe = PositionalEncoding(4, 0)
+    data = torch.zeros(40, 1, 4)  # [seq_len, batch_size, embedding_dim]
+    print(pe(data))
+    print(pe(data).shape)
