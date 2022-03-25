@@ -16,6 +16,8 @@ would give even better results.
 # spacy==2.3.5
 # torchtext==0.10.0
 # torch==1.9.0
+# tensorboard==2.8.0
+# setuptools==58.0.4
 
 
 import torch
