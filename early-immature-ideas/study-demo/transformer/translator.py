@@ -12,6 +12,11 @@ while (not too long) gives a BLEU score
 of ~35, and I think training for longer
 would give even better results.
 """
+# scipy==1.8.0
+# spacy==2.3.5
+# torchtext==0.10.0
+# torch==1.9.0
+
 
 import torch
 import torch.nn as nn
